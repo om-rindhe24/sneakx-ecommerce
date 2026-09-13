@@ -2,6 +2,8 @@ package com.sneakx.util;
 
 import com.sneakx.entity.*;
 import com.sneakx.repository.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -12,6 +14,8 @@ import java.util.*;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
+
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
@@ -50,15 +54,22 @@ public class DataInitializer implements CommandLineRunner {
     @Transactional
     public void run(String... args) throws Exception {
         if (roleRepository.count() == 0) {
+            log.info("[DataInitializer] Seeding initial roles...");
             seedRoles();
         }
 
         seedUsers();
-
         seedBrands();
         seedCategories();
 
-        seedProducts();
+        long productCount = productRepository.count();
+        if (productCount == 0) {
+            log.info("[DataInitializer] Database is empty. Seeding initial 37 products, variants, and reviews...");
+            seedProducts();
+            log.info("[DataInitializer] Seeding completed successfully. Total products: {}", productRepository.count());
+        } else {
+            log.info("[DataInitializer] Database already initialized with {} products. Skipping product seeding to ensure immediate port binding.", productCount);
+        }
     }
 
     private void seedRoles() {
@@ -67,6 +78,16 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedUsers() {
+        boolean adminExists = userRepository.findByEmail("admin@sneakx.in").isPresent() ||
+                userRepository.findByEmail("admin@sneakx.com").isPresent();
+        boolean customerExists = userRepository.findByEmail("rohan.sharma@sneakx.in").isPresent() ||
+                userRepository.findByEmail("customer@sneakx.com").isPresent();
+
+        if (adminExists && customerExists) {
+            log.debug("[DataInitializer] Seed users already exist. Skipping user seeding.");
+            return;
+        }
+
         Role userRole = roleRepository.findByName("ROLE_USER").orElseThrow();
         Role adminRole = roleRepository.findByName("ROLE_ADMIN").orElseThrow();
 
@@ -111,6 +132,10 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedBrands() {
+        if (brandRepository.count() >= 7) {
+            log.debug("[DataInitializer] Brands already exist. Skipping brand seeding.");
+            return;
+        }
         saveBrandIfMissing("Nike", "nike", "https://upload.wikimedia.org/wikipedia/commons/a/a6/Logo_NIKE.svg");
         saveBrandIfMissing("Jordan", "jordan", "https://upload.wikimedia.org/wikipedia/en/3/37/Jumpman_logo.svg");
         saveBrandIfMissing("Adidas", "adidas", "https://upload.wikimedia.org/wikipedia/commons/2/20/Adidas_Logo.svg");
@@ -127,6 +152,10 @@ public class DataInitializer implements CommandLineRunner {
     }
 
     private void seedCategories() {
+        if (categoryRepository.count() >= 4) {
+            log.debug("[DataInitializer] Categories already exist. Skipping category seeding.");
+            return;
+        }
         saveCategoryIfMissing("Basketball", "basketball", "High-performance hardwood silhouettes and retro court icons");
         saveCategoryIfMissing("Lifestyle", "lifestyle", "Iconic streetwear staples, everyday comfort, and hype grails");
         saveCategoryIfMissing("Running", "running", "Responsive cushioning, breathable mesh uppers, and road warriors");

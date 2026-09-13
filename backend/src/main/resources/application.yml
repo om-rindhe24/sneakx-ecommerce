@@ -1,5 +1,6 @@
 server:
   port: ${PORT:8080}
+  address: 0.0.0.0
 
 spring:
   application:
@@ -11,6 +12,10 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 2
   jpa:
     hibernate:
       ddl-auto: ${HIBERNATE_DDL_AUTO:update}
@@ -49,6 +54,9 @@ app:
 
 ---
 # Production Profile: Aiven MySQL / Managed MySQL
+server:
+  port: ${PORT:8080}
+  address: 0.0.0.0
 spring:
   config:
     activate:
