@@ -1,0 +1,72 @@
+:root {
+  /* =========================================================================
+     SNEAKX PREMIUM STREETWEAR DESIGN TOKENS (DARK MODE BASE)
+     Inspired by Nike SNKRS, END Clothing, and Off-White
+     ========================================================================= */
+
+  /* Surfaces & Canvas — Near-black atmospheric depth */
+  --bg-primary: #0B0C0E;        /* Deep matte graphite base canvas */
+  --bg-secondary: #12141A;      /* Layered contrast section background */
+  --bg-card: #161820;           /* Elevated card surface */
+  --bg-card-hover: #1D202A;     /* Elevated hover card surface */
+  --bg-dark: #07080A;           /* Obsidian deepest contrast (footer/nav/scrims) */
+  --bg-tertiary: #1A1C24;       /* Pill, badge, and container surface */
+  --bg-elevated: #222530;       /* Floating dropdowns, modals, drawers */
+
+  /* Glassmorphism & Translucent Overlays */
+  --glass-bg: rgba(11, 12, 14, 0.82);
+  --glass-bg-elevated: rgba(22, 24, 32, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-hover: rgba(255, 255, 255, 0.18);
+  --glass-blur: blur(20px);
+
+  /* Typography Colors — High WCAG AA Contrast on Dark Canvas */
+  --text-primary: #FFFFFF;      /* Crisp white headlines and titles */
+  --text-secondary: #A1A4B0;    /* High-legibility neutral gray for body & labels */
+  --text-muted: #656875;        /* Subdued metadata, captions, and micro-tags */
+  --text-inverse: #0B0C0E;      /* Dark text on white/accent buttons */
+
+  /* Brand Accents — Signature SneakX Red (Used Sparingly for High Impact) */
+  --accent-primary: #FF3B30;    /* Vibrant editorial red */
+  --accent-hover: #E02E24;      /* Deepened hover red */
+  --accent-glow: rgba(255, 59, 48, 0.28);
+  --accent-glow-subtle: rgba(255, 59, 48, 0.12);
+
+  /* Micro-Badges & Status */
+  --status-success: #10B981;
+  --status-warning: #F59E0B;
+  --status-danger: #EF4444;
+  --status-info: #3B82F6;
+
+  /* Editorial Borders */
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-medium: rgba(255, 255, 255, 0.15);
+  --border-focus: #FFFFFF;
+
+  /* Standardized Radii — Consistent 12px Standard */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-card: 12px;          /* Master card radius requested */
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-full: 9999px;
+
+  /* Ambient Shadows — Soft Deep Drop */
+  --shadow-subtle: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-card: 0 8px 24px -4px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--border-subtle);
+  --shadow-hover: 0 18px 40px -6px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--glass-border-hover);
+  --shadow-modal: 0 24px 60px -10px rgba(0, 0, 0, 0.8), 0 0 0 1px var(--border-medium);
+
+  /* Typography Families */
+  --font-family-display: "Space Grotesk", sans-serif;
+  --font-family-body: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-family-mono: "JetBrains Mono", monospace;
+
+  /* Motion & Easings */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 160ms;
+  --duration-normal: 260ms;
+  --duration-slow: 450ms;
+}
