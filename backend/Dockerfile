@@ -35,5 +35,5 @@ USER sneakx
 # Expose default HTTP port (overridable at runtime via PORT environment variable)
 EXPOSE 8080
 
-# Run Spring Boot application
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Run Spring Boot application with dynamic PORT expansion and 0.0.0.0 binding
+ENTRYPOINT ["sh", "-c", "exec java -Dserver.port=${PORT:-8080} -Dserver.address=0.0.0.0 -Djava.security.egd=file:/dev/./urandom -jar app.jar"]
