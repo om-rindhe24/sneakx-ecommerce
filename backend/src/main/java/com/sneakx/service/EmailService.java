@@ -10,19 +10,23 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Locale;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
@@ -31,6 +35,7 @@ public class EmailService {
     private static final Logger log = LoggerFactory.getLogger(EmailService.class);
 
     private final JavaMailSender autowiredMailSender;
+    private final RestTemplate restTemplate;
 
     @Value("${spring.mail.host:}")
     private String mailHost;
@@ -53,21 +58,137 @@ public class EmailService {
     @Value("${app.frontend.url:http://localhost:5173}")
     private String frontendUrl;
 
+    @Value("${app.mail.brevo.api-key:${BREVO_API_KEY:}}")
+    private String brevoApiKey;
+
+    @Value("${app.mail.brevo.from-email:${BREVO_FROM_EMAIL:${app.mail.from:orders@sneakx.com}}}")
+    private String brevoFromEmail;
+
     // Concurrency protection: prevent duplicate confirmation emails for the same order
     private final Set<String> processedOrderDispatches = ConcurrentHashMap.newKeySet();
 
-    public EmailService(@Autowired(required = false) JavaMailSender autowiredMailSender) {
+    public EmailService(@Autowired(required = false) JavaMailSender autowiredMailSender,
+                        @Autowired(required = false) RestTemplate restTemplate) {
         this.autowiredMailSender = autowiredMailSender;
+        this.restTemplate = restTemplate != null ? restTemplate : createDefaultRestTemplate();
+    }
+
+    private static RestTemplate createDefaultRestTemplate() {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(10000);
+        factory.setReadTimeout(10000);
+        return new RestTemplate(factory);
+    }
+
+    public String resolveBrevoApiKey() {
+        if (brevoApiKey != null && !brevoApiKey.trim().isEmpty()) {
+            return brevoApiKey.trim();
+        }
+        String envKey = System.getenv("BREVO_API_KEY");
+        if (envKey != null && !envKey.trim().isEmpty()) {
+            return envKey.trim();
+        }
+        return null;
+    }
+
+    public String resolveBrevoFromEmail() {
+        if (brevoFromEmail != null && brevoFromEmail.contains("@")) {
+            return brevoFromEmail.trim();
+        }
+        String envFrom = System.getenv("BREVO_FROM_EMAIL");
+        if (envFrom != null && envFrom.contains("@")) {
+            return envFrom.trim();
+        }
+        return resolveFromAddress();
+    }
+
+    public void setBrevoApiKey(String brevoApiKey) {
+        this.brevoApiKey = brevoApiKey;
+    }
+
+    public void setBrevoFromEmail(String brevoFromEmail) {
+        this.brevoFromEmail = brevoFromEmail;
+    }
+
+    public RestTemplate getRestTemplate() {
+        return restTemplate;
+    }
+
+    /**
+     * Sends an email via Brevo's HTTPS REST API (POST https://api.brevo.com/v3/smtp/email).
+     * Operates over port 443 (HTTPS), completely bypassing cloud outbound SMTP port blocks (587/465).
+     *
+     * @param recipientEmail destination email address
+     * @param recipientName  display name of recipient (optional)
+     * @param subject        email subject
+     * @param htmlContent    full HTML formatted body
+     * @param senderName     sender display name ("SneakX Orders" or "SneakX Alerts")
+     * @return true if Brevo accepted the email (2xx response), false otherwise
+     */
+    public boolean sendViaBrevoApi(String recipientEmail, String recipientName, String subject, String htmlContent, String senderName) {
+        String apiKey = resolveBrevoApiKey();
+        if (apiKey == null || apiKey.isEmpty()) {
+            return false;
+        }
+
+        String fromEmail = resolveBrevoFromEmail();
+        String effectiveSenderName = senderName != null && !senderName.trim().isEmpty() ? senderName.trim() : "SneakX";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.set("api-key", apiKey);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+
+        Map<String, Object> senderMap = new HashMap<>();
+        senderMap.put("name", effectiveSenderName);
+        senderMap.put("email", fromEmail);
+
+        Map<String, Object> toMap = new HashMap<>();
+        toMap.put("email", recipientEmail);
+        if (recipientName != null && !recipientName.trim().isEmpty()) {
+            toMap.put("name", recipientName.trim());
+        }
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("sender", senderMap);
+        body.put("to", Collections.singletonList(toMap));
+        body.put("subject", subject);
+        body.put("htmlContent", htmlContent);
+
+        HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
+
+        try {
+            log.info("[BREVO-API] Dispatching transactional email to {} via Brevo REST API (Subject: '{}')", recipientEmail, subject);
+            ResponseEntity<String> response = restTemplate.postForEntity(
+                    "https://api.brevo.com/v3/smtp/email",
+                    requestEntity,
+                    String.class
+            );
+
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("[BREVO-API] Email successfully delivered to {} via Brevo. Response: {}", recipientEmail, response.getBody());
+                return true;
+            } else {
+                log.warn("[BREVO-API] Brevo API responded with non-2xx status: {}", response.getStatusCode());
+                return false;
+            }
+        } catch (Exception ex) {
+            log.error("[BREVO-API] Failed to deliver email to {} via Brevo API: {}",
+                    recipientEmail, sanitizeErrorMessage(ex.getMessage()));
+            return false;
+        }
     }
 
     /**
      * Sends an order confirmation email to the authenticated customer's actual registered email address.
      * Guaranteed to execute only after the order transaction is successfully committed.
-     * If SMTP is not configured, logs a formatted receipt to the console as a safe development fallback.
-     * If SMTP delivery fails, logs safely without rolling back the customer's completed order.
+     * Order of execution:
+     * 1. Brevo REST API (HTTPS / port 443) if BREVO_API_KEY is configured (Production on Render)
+     * 2. Gmail / SMTP (port 587) if configured (Local development)
+     * 3. Safe console fallback if neither provider is configured or if both fail (preserves order)
      *
      * @param order the committed order entity
-     * @return true if notification was dispatched (real SMTP or safe fallback), false on error
+     * @return true if notification was dispatched (Brevo, SMTP, or safe fallback), false on unhandled error
      */
     public boolean sendOrderConfirmation(Order order) {
         if (order == null || order.getUser() == null) {
@@ -95,40 +216,52 @@ public class EmailService {
         String subject = "Order Confirmed #" + orderNumber + " | SneakX";
         String htmlContent = buildOrderEmailHtml(order, customerName);
 
+        // 3. Method 1: Try Brevo REST API first (Production method over HTTPS port 443)
+        if (resolveBrevoApiKey() != null) {
+            String fromDisplayName = mailFromName != null && !mailFromName.trim().isEmpty() ? mailFromName.trim() : "SneakX Orders";
+            boolean sent = sendViaBrevoApi(recipientEmail, customerName, subject, htmlContent, fromDisplayName);
+            if (sent) {
+                order.setConfirmationEmailSent(true);
+                log.info("[EMAIL-SERVICE] Real order confirmation email successfully delivered to {} via Brevo API for order #{}",
+                        recipientEmail, orderNumber);
+                return true;
+            }
+            log.warn("[EMAIL-SERVICE] Brevo API delivery failed for order #{}. Falling back to SMTP if available.", orderNumber);
+        }
+
+        // 4. Method 2: Fall back to SMTP (Local development method over port 587)
         JavaMailSender sender = getEffectiveMailSender();
 
-        // Safe console fallback for development when SMTP credentials are not supplied
-        if (sender == null) {
-            log.warn("[EMAIL-SERVICE] SMTP NOT CONFIGURED: Set MAIL_HOST, MAIL_PORT, MAIL_USERNAME, MAIL_PASSWORD in environment to enable real inbox delivery.");
-            logDevFallbackReceipt(order, recipientEmail, customerName, subject);
-            order.setConfirmationEmailSent(false);
-            return true;
+        if (sender != null) {
+            try {
+                MimeMessage message = sender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                String fromAddress = resolveFromAddress();
+                String fromDisplayName = mailFromName != null && !mailFromName.trim().isEmpty() ? mailFromName.trim() : "SneakX Orders";
+                helper.setFrom(new InternetAddress(fromAddress, fromDisplayName));
+                helper.setTo(recipientEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlContent, true);
+
+                sender.send(message);
+                order.setConfirmationEmailSent(true);
+                log.info("[EMAIL-SERVICE] Real order confirmation email successfully delivered to {} via SMTP for order #{}",
+                        recipientEmail, orderNumber);
+                return true;
+            } catch (Exception ex) {
+                // NEVER let SMTP failure break or roll back the successful order
+                log.error("[EMAIL-SERVICE] Failed to deliver real SMTP email to {} for order #{}: {}",
+                        recipientEmail, orderNumber, sanitizeErrorMessage(ex.getMessage()));
+            }
         }
 
-        // Real SMTP delivery
-        try {
-            MimeMessage message = sender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            String fromAddress = resolveFromAddress();
-            String fromDisplayName = mailFromName != null && !mailFromName.trim().isEmpty() ? mailFromName.trim() : "SneakX Orders";
-            helper.setFrom(new InternetAddress(fromAddress, fromDisplayName));
-            helper.setTo(recipientEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
-            sender.send(message);
-            order.setConfirmationEmailSent(true);
-            log.info("[EMAIL-SERVICE] Real order confirmation email successfully delivered to {} for order #{}",
-                    recipientEmail, orderNumber);
-            return true;
-        } catch (Exception ex) {
-            // NEVER let SMTP failure break or roll back the successful order
-            log.error("[EMAIL-SERVICE] Failed to deliver real SMTP email to {} for order #{}: {}",
-                    recipientEmail, orderNumber, sanitizeErrorMessage(ex.getMessage()));
-            logDevFallbackReceipt(order, recipientEmail, customerName, subject);
-            order.setConfirmationEmailSent(false);
-            return false;
+        // 5. Method 3: Safe console fallback when neither provider is active
+        if (resolveBrevoApiKey() == null && sender == null) {
+            log.warn("[EMAIL-SERVICE] Neither Brevo API nor SMTP is configured. Set BREVO_API_KEY or MAIL_HOST/MAIL_PASSWORD in environment.");
         }
+        logDevFallbackReceipt(order, recipientEmail, customerName, subject);
+        order.setConfirmationEmailSent(false);
+        return resolveBrevoApiKey() == null && sender == null;
     }
 
     private JavaMailSender getEffectiveMailSender() {
@@ -531,39 +664,53 @@ public class EmailService {
         String subject = "⚡ Welcome to SneakX VIP Drop Alerts | Early Access Unlocked";
         String htmlContent = buildNewsletterWelcomeHtml(recipientEmail);
 
+        // 1. Try Brevo REST API first if configured (Production method over HTTPS port 443)
+        if (resolveBrevoApiKey() != null) {
+            String fromDisplayName = "SneakX Alerts";
+            boolean sent = sendViaBrevoApi(recipientEmail, null, subject, htmlContent, fromDisplayName);
+            if (sent) {
+                log.info("[EMAIL-SERVICE] Real VIP newsletter welcome email successfully delivered to {} via Brevo API", recipientEmail);
+                return true;
+            }
+            log.warn("[EMAIL-SERVICE] Brevo API delivery failed for newsletter welcome to {}. Falling back to SMTP if available.", recipientEmail);
+        }
+
+        // 2. Fall back to Gmail SMTP (Local development method over port 587)
         JavaMailSender sender = getEffectiveMailSender();
 
-        if (sender == null) {
-            log.warn("[EMAIL-SERVICE] SMTP NOT CONFIGURED: Newsletter welcome email logged to console fallback.");
-            log.info("\n" +
-                    "========================================================================================\n" +
-                    " [SNEAKX EMAIL SERVICE] NEWSLETTER WELCOME DISPATCHED (DEVELOPMENT FALLBACK LOG)\n" +
-                    "========================================================================================\n" +
-                    " To:          " + recipientEmail + "\n" +
-                    " From:        SneakX Alerts <" + resolveFromAddress() + ">\n" +
-                    " Subject:     " + subject + "\n" +
-                    " Status:      VIP Early Access Granted\n" +
-                    "========================================================================================\n");
-            return true;
+        if (sender != null) {
+            try {
+                MimeMessage message = sender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                String fromAddress = resolveFromAddress();
+                helper.setFrom(new InternetAddress(fromAddress, "SneakX Alerts"));
+                helper.setTo(recipientEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlContent, true);
+
+                sender.send(message);
+                log.info("[EMAIL-SERVICE] Real VIP newsletter welcome email successfully delivered to {} via SMTP", recipientEmail);
+                return true;
+            } catch (Exception ex) {
+                log.error("[EMAIL-SERVICE] Failed to deliver VIP newsletter welcome to {} via SMTP: {}",
+                        recipientEmail, sanitizeErrorMessage(ex.getMessage()));
+            }
         }
 
-        try {
-            MimeMessage message = sender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
-            String fromAddress = resolveFromAddress();
-            helper.setFrom(new InternetAddress(fromAddress, "SneakX Alerts"));
-            helper.setTo(recipientEmail);
-            helper.setSubject(subject);
-            helper.setText(htmlContent, true);
-
-            sender.send(message);
-            log.info("[EMAIL-SERVICE] Real VIP newsletter welcome email successfully delivered to {}", recipientEmail);
-            return true;
-        } catch (Exception ex) {
-            log.error("[EMAIL-SERVICE] Failed to deliver VIP newsletter welcome to {}: {}",
-                    recipientEmail, sanitizeErrorMessage(ex.getMessage()));
-            return false;
+        // 3. Safe console fallback when neither provider is active
+        if (resolveBrevoApiKey() == null && sender == null) {
+            log.warn("[EMAIL-SERVICE] Neither Brevo API nor SMTP is configured. Newsletter welcome email logged to console fallback.");
         }
+        log.info("\n" +
+                "========================================================================================\n" +
+                " [SNEAKX EMAIL SERVICE] NEWSLETTER WELCOME DISPATCHED (DEVELOPMENT FALLBACK LOG)\n" +
+                "========================================================================================\n" +
+                " To:          " + recipientEmail + "\n" +
+                " From:        SneakX Alerts <" + resolveFromAddress() + ">\n" +
+                " Subject:     " + subject + "\n" +
+                " Status:      VIP Early Access Granted\n" +
+                "========================================================================================\n");
+        return true;
     }
 
     private String buildNewsletterWelcomeHtml(String recipientEmail) {
