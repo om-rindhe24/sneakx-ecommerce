@@ -38,7 +38,7 @@ export const OrdersPage = () => {
 
       {orders.length === 0 ? (
         <div style={{
-          backgroundColor: '#FFFFFF',
+          backgroundColor: 'var(--bg-card)',
           border: '1px solid var(--border-subtle)',
           borderRadius: 'var(--radius-lg)',
           boxShadow: 'var(--shadow-card)',
@@ -63,7 +63,7 @@ export const OrdersPage = () => {
 
             return (
               <div key={order.id} style={{
-                backgroundColor: '#FFFFFF',
+                backgroundColor: 'var(--bg-card)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: 'var(--radius-lg)',
                 boxShadow: 'var(--shadow-card)',
@@ -72,7 +72,7 @@ export const OrdersPage = () => {
                 {/* Header */}
                 <div style={{
                   padding: '16px 24px',
-                  backgroundColor: 'var(--bg-primary)',
+                  backgroundColor: 'var(--bg-secondary)',
                   borderBottom: '1px solid var(--border-subtle)',
                   display: 'flex',
                   flexWrap: 'wrap',
@@ -82,7 +82,7 @@ export const OrdersPage = () => {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                     <div>
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Tracking ID</span>
+                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tracking ID</span>
                       <p style={{ fontFamily: 'var(--font-family-mono)', fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>
                         {order.orderNumber}
                       </p>
@@ -94,7 +94,7 @@ export const OrdersPage = () => {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
                     <span className={`badge ${statusColor}`}>{order.status}</span>
                     <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '16px', fontWeight: 800, color: 'var(--accent-primary)' }}>
                       ₹{order.totalAmount?.toLocaleString('en-IN')}
@@ -103,13 +103,14 @@ export const OrdersPage = () => {
                 </div>
 
                 {/* Items */}
-                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', backgroundColor: 'var(--bg-card)' }}>
                   {order.items?.map((item) => (
                     <div key={item.id} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                       <div style={{
-                        width: '64px',
-                        height: '64px',
-                        backgroundColor: '#F4F3F0',
+                        width: '68px',
+                        height: '68px',
+                        backgroundColor: 'var(--bg-secondary)',
+                        border: '1px solid var(--border-subtle)',
                         borderRadius: 'var(--radius-md)',
                         padding: '6px',
                         flexShrink: 0,
@@ -121,13 +122,13 @@ export const OrdersPage = () => {
                       </div>
 
                       <div style={{ flex: 1 }}>
-                        <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)' }}>{item.productName}</h4>
-                        <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                        <h4 style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '4px' }}>{item.productName}</h4>
+                        <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
                           Size: US {item.size} • Color: {item.colorway} • Qty: {item.quantity}
                         </p>
                       </div>
 
-                      <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                      <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)' }}>
                         ₹{item.price?.toLocaleString('en-IN')}
                       </span>
                     </div>
@@ -136,17 +137,18 @@ export const OrdersPage = () => {
 
                 {/* Footer / Address info */}
                 <div style={{
-                  padding: '12px 24px',
+                  padding: '14px 24px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.02)',
                   borderTop: '1px solid var(--border-subtle)',
-                  fontSize: '12px',
-                  color: 'var(--text-muted)',
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '10px'
                 }}>
-                  <MapPin size={14} />
+                  <MapPin size={15} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
                   <span>
-                    Delivering to {order.shippingAddress?.fullName} — {order.shippingAddress?.streetAddress}, {order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.postalCode}
+                    Delivering to <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{order.shippingAddress?.fullName}</strong> — {order.shippingAddress?.streetAddress}, {order.shippingAddress?.city}, {order.shippingAddress?.state} {order.shippingAddress?.postalCode}
                   </span>
                 </div>
               </div>
