@@ -84,6 +84,15 @@ public class DataInitializer implements CommandLineRunner {
                 userRepository.findByEmail("customer@sneakx.com").isPresent();
 
         if (adminExists && customerExists) {
+            userRepository.findByEmail("admin@sneakx.in").ifPresent(existingAdmin -> {
+                if ("Alex".equalsIgnoreCase(existingAdmin.getFirstName())) {
+                    existingAdmin.setFirstName("Om");
+                    existingAdmin.setLastName("Rindhe");
+                    existingAdmin.setPhone("7558650888");
+                    userRepository.save(existingAdmin);
+                    log.info("[DataInitializer] Migrated existing admin account to Om Rindhe (7558650888).");
+                }
+            });
             log.debug("[DataInitializer] Seed users already exist. Skipping user seeding.");
             return;
         }
@@ -94,12 +103,12 @@ public class DataInitializer implements CommandLineRunner {
         // 1. Production Admin Account
         User admin = userRepository.findByEmail("admin@sneakx.in")
                 .orElseGet(() -> userRepository.findByEmail("admin@sneakx.com")
-                        .orElse(new User("Alex", "Mercer", "admin@sneakx.in", "", "+91 9876543210")));
-        admin.setFirstName("Alex");
-        admin.setLastName("Mercer");
+                        .orElse(new User("Om", "Rindhe", "admin@sneakx.in", "", "7558650888")));
+        admin.setFirstName("Om");
+        admin.setLastName("Rindhe");
         admin.setEmail("admin@sneakx.in");
         admin.setPasswordHash(passwordEncoder.encode("SneakX@Admin2026!"));
-        admin.setPhone("+91 9876543210");
+        admin.setPhone("7558650888");
         admin.setRoles(new HashSet<>(Arrays.asList(userRole, adminRole)));
         userRepository.save(admin);
 
