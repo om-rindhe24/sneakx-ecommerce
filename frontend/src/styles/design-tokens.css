@@ -31,6 +31,8 @@
   --accent-hover: #E02E24;      /* Deepened hover red */
   --accent-glow: rgba(255, 59, 48, 0.28);
   --accent-glow-subtle: rgba(255, 59, 48, 0.12);
+  --accent-volt: #CCFF00;       /* High-visibility volt for alerts & toasts */
+  --accent-volt-text: #0B0C0E;  /* High-contrast obsidian dark text on volt */
 
   /* Micro-Badges & Status */
   --status-success: #10B981;

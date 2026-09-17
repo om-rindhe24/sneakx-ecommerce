@@ -119,20 +119,36 @@ export const ProductDetailPage = () => {
     <div className="container" style={{ padding: '40px 24px', display: 'flex', flexDirection: 'column', gap: '64px' }}>
       {/* Toast Alert */}
       {toastMessage && (
-        <div style={{
-          position: 'fixed',
-          bottom: '24px',
-          right: '24px',
-          backgroundColor: 'var(--accent-volt)',
-          color: 'var(--accent-volt-text)',
-          fontWeight: 700,
-          fontSize: '13px',
-          padding: '12px 20px',
-          borderRadius: 'var(--radius-md)',
-          boxShadow: 'var(--shadow-modal)',
-          zIndex: 1100
-        }}>
-          ✓ {toastMessage}
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'fixed',
+            top: '24px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            backgroundColor: 'var(--accent-volt, #CCFF00)',
+            color: 'var(--accent-volt-text, #0B0C0E)',
+            fontWeight: 800,
+            fontSize: '13px',
+            padding: '12px 24px',
+            borderRadius: 'var(--radius-full, 9999px)',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.75), 0 0 24px rgba(204, 255, 0, 0.35)',
+            border: '1px solid rgba(0, 0, 0, 0.15)',
+            zIndex: 2000,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            whiteSpace: 'nowrap',
+            maxWidth: 'calc(100vw - 32px)',
+            textOverflow: 'ellipsis',
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            letterSpacing: '0.01em'
+          }}
+        >
+          <span style={{ fontSize: '15px', fontWeight: 900 }}>✓</span>
+          <span>{toastMessage}</span>
         </div>
       )}
 
