@@ -43,6 +43,10 @@ app:
   jwt:
     secret: ${JWT_SECRET:dev_secret_key_not_for_production_use_min_32_bytes_long_fallback}
     expiration-ms: ${JWT_EXPIRATION:86400000}
+  admin:
+    initial-password: ${ADMIN_INITIAL_PASSWORD:ChangeMe123!}
+  demo:
+    customer-password: ${DEMO_CUSTOMER_PASSWORD:ChangeMe123!}
   mail:
     from: ${MAIL_FROM:${MAIL_USERNAME:orders@sneakx.com}}
     from-name: ${MAIL_FROM_NAME:SneakX Orders}

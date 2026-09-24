@@ -4,6 +4,7 @@ import com.sneakx.entity.*;
 import com.sneakx.repository.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -16,6 +17,12 @@ import java.util.*;
 public class DataInitializer implements CommandLineRunner {
 
     private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
+
+    @Value("${app.admin.initial-password:${ADMIN_INITIAL_PASSWORD:ChangeMe123!}}")
+    private String adminInitialPassword;
+
+    @Value("${app.demo.customer-password:${DEMO_CUSTOMER_PASSWORD:ChangeMe123!}}")
+    private String demoCustomerPassword;
 
     private final RoleRepository roleRepository;
     private final UserRepository userRepository;
@@ -93,11 +100,6 @@ public class DataInitializer implements CommandLineRunner {
                     updated = true;
                     log.info("[DataInitializer] Migrated legacy admin account details.");
                 }
-                if (!passwordEncoder.matches("ChangeMe123!", existingAdmin.getPasswordHash())) {
-                    existingAdmin.setPasswordHash(passwordEncoder.encode("ChangeMe123!"));
-                    updated = true;
-                    log.info("[DataInitializer] Updated existing admin password to new credential.");
-                }
                 if (updated) {
                     userRepository.save(existingAdmin);
                 }
@@ -112,11 +114,11 @@ public class DataInitializer implements CommandLineRunner {
         // 1. Production Admin Account
         User admin = userRepository.findByEmail("admin@sneakx.in")
                 .orElseGet(() -> userRepository.findByEmail("admin@sneakx.com")
-                        .orElse(new User("Om", "Rindhe", "admin@sneakx.in", "", "+91 98765 43210")));
+                        .orElse(new User("Admin", "User", "admin@sneakx.in", "", "+91 98765 43210")));
         admin.setFirstName("Om");
         admin.setLastName("Rindhe");
         admin.setEmail("admin@sneakx.in");
-        admin.setPasswordHash(passwordEncoder.encode("ChangeMe123!"));
+        admin.setPasswordHash(passwordEncoder.encode(adminInitialPassword));
         admin.setPhone("+91 98765 43210");
         admin.setRoles(new HashSet<>(Arrays.asList(userRole, adminRole)));
         userRepository.save(admin);
@@ -128,7 +130,7 @@ public class DataInitializer implements CommandLineRunner {
         customer.setFirstName("Rohan");
         customer.setLastName("Sharma");
         customer.setEmail("rohan.sharma@sneakx.in");
-        customer.setPasswordHash(passwordEncoder.encode("ChangeMe123!"));
+        customer.setPasswordHash(passwordEncoder.encode(demoCustomerPassword));
         customer.setPhone("+91 9123456780");
         customer.setRoles(new HashSet<>(Collections.singletonList(userRole)));
         User savedCustomer = userRepository.save(customer);
