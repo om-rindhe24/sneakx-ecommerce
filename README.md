@@ -19,12 +19,7 @@
 | **Backend REST API** | Render | [https://sneakx-backend-sm4h.onrender.com](https://sneakx-backend-sm4h.onrender.com) | ![Active](https://img.shields.io/badge/Status-Online-success?style=flat-square) |
 | **API Health Check** | Render | [https://sneakx-backend-sm4h.onrender.com/api/health](https://sneakx-backend-sm4h.onrender.com/api/health) | `{"status":"UP"}` |
 
-### 🔑 Demo Accounts for Quick Evaluation
-
-| Role | Email | Password | Pre-configured Privileges |
-| :--- | :--- | :--- | :--- |
-| **System Administrator** | `admin@sneakx.in` | `ChangeMe123!` | Access to `/admin` dashboard, order state updates, revenue metrics, stock management |
-| **Sample Customer** | `rohan.sharma@sneakx.in` | `ChangeMe123!` | Default shipping address, order history, active wishlist, cart persistence |
+> 🔒 **Security Notice & Demo Access**: Pre-configured demo credentials for the admin dashboard and customer accounts are available upon request for recruiters and hiring managers. Please contact [rindheom261@gmail.com](mailto:rindheom261@gmail.com) for secure access.
 
 ---
 
@@ -32,26 +27,18 @@
 
 > *Streetwear-inspired dark mode interface with neon accents, fluid transitions, and responsive mobile-first layouts.*
 
-```
-+--------------------------------------------------------------------------------------------------+
-|  [ SNEAKX ]    BRANDS   CATEGORIES   NEW DROPS   SALE        [ Search sneakers... ]  (Wish) (Cart)|
-+--------------------------------------------------------------------------------------------------+
-|                                                                                                  |
-|   LIMITED EDITION DROP                                     /|       AIR JORDAN 1 CHICAGO         |
-|   AIR JORDAN 1 RETRO HIGH OG                              / |       Size: UK 7.5 - UK 11.0       |
-|   Iconic silhouette in Varsity Red & White.              /  |       Price: ₹16,999               |
-|                                                         /___|       In Stock: 10 units           |
-|   [ EXPLORE DROP ]   [ SIZE ADVISOR ]                               [ ADD TO CART ]              |
-|                                                                                                  |
-+--------------------------------------------------------------------------------------------------+
-|  7 CURATED BRAND SILOS                                                                           |
-|  [ NIKE ]   [ JORDAN ]   [ ADIDAS ]   [ YEEZY ]   [ NEW BALANCE ]   [ CONVERSE ]   [ PUMA ]      |
-+--------------------------------------------------------------------------------------------------+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│  SNEAKX STREETWEAR MARKETPLACE                                         │
+│  7 Curated Brand Silos  •  37 Silhouettes  •  Size Advisor Heuristics  │
+└────────────────────────────────────────────────────────────────────────┘
 ```
 
-| Desktop View | Mobile Experience | Admin Panel |
-| :---: | :---: | :---: |
-| *(Hero Carousel, Brand Silos & Grid)* | *(Responsive Bottom Nav & Drawer)* | *(KPI Counters, Charts & Order Triage)* |
+| Interface View | Experience Highlights | Target Device |
+| :--- | :--- | :--- |
+| **Catalog & Brand Silos** | Strict brand isolation, instant search & compound filters | Desktop / Tablet |
+| **Product Detail & Fit** | Interactive size selector, stock alerts & Size Advisor | Mobile / Touch |
+| **Admin Operations** | Executive revenue KPIs, order state machine & stock triage | Authenticated Admin |
 
 *(Screenshots can be added under `assets/screenshots/`)*
 
@@ -97,25 +84,32 @@
 
 ## 🛠️ Technology Stack
 
-```
-+--------------------------------------------------------------------+
-|                         CLIENT TIER                                |
-|  React 18 | React Router 6 | Vite 5 | Axios | Lucide React | CSS3   |
-+----------------------------------+---------------------------------+
-                                   | HTTPS / JSON / JWT
-                                   v
-+--------------------------------------------------------------------+
-|                        APPLICATION TIER                            |
-|       Spring Boot 3.3.3 | Spring Security 6 | Spring Data JPA      |
-|           Tomcat Embedded | HikariCP | Hibernate ORM               |
-+------------------+-------------------------------+-----------------+
-                   |                               |
-                   v                               v
-+----------------------------------+ +-------------------------------+
-|           DATA TIER              | |       EXTERNAL SERVICES       |
-|  MySQL 8.0 (Aiven Cloud / Local) | |  Razorpay (Payments & HMAC)   |
-|  H2 Database (Test Profile)      | |  Brevo API / SMTP (Emails)    |
-+----------------------------------+ +-------------------------------+
+```mermaid
+graph TD
+    subgraph Client["Client Tier (React 18 + Vite 5)"]
+        UI[React SPA] --> Axios[Axios Interceptors & JWT]
+    end
+
+    subgraph Server["Application Tier (Spring Boot 3.3.3)"]
+        Gateway[Spring Security 6 & JWT Filter]
+        Controllers[REST Controllers]
+        Services[Transactional Business Services]
+        Gateway --> Controllers --> Services
+    end
+
+    subgraph Data["Data Tier"]
+        DB[(Aiven Cloud MySQL / Local H2)]
+    end
+
+    subgraph External["External Integrations"]
+        Razorpay[Razorpay Payment Gateway]
+        Brevo[Brevo REST API / SMTP]
+    end
+
+    Axios -->|HTTPS / JSON| Gateway
+    Services --> DB
+    Services --> Razorpay
+    Services --> Brevo
 ```
 
 ### Backend Architecture
@@ -278,7 +272,10 @@ Executed live against running Spring Boot and Vite servers with active MySQL con
 - **Apache Maven**: Version 3.8+ (`mvn -version` or use provided `./mvnw.cmd`)
 - **Node.js**: Version 18.0.0+ (`node -v`)
 - **npm**: Version 9.0.0+ (`npm -v`)
-- **MySQL Server**: Version 8.0+ running locally on port 3306
+- **Database Option**:
+  - **Zero-Setup (Recommended for quick evaluation)**: Embedded in-memory **H2 Database** (requires no MySQL installation).
+  - **OR Local MySQL**: MySQL 8.0+ running on port 3306.
+  - *(Note: Production runs on managed **Aiven Cloud MySQL** with SSL/TLS encryption).*
 
 ---
 
@@ -292,21 +289,29 @@ cd sneakx-ecommerce
 
 ### Step 2: Backend Configuration & Startup
 
-1. **Create MySQL Database**:
+Choose whichever database option is most convenient:
+
+#### Option A: Zero-Setup In-Memory H2 (Recommended for Fast Preview)
+No MySQL installation required. Tables and seed data (37 sneakers, 7 brands, roles) are initialized automatically in memory:
+```bash
+cd backend
+mvn clean spring-boot:run -Dspring-boot.run.profiles=h2
+```
+
+#### Option B: Local or Cloud MySQL (Production-Parity)
+1. If using local MySQL, create the database:
    ```sql
    CREATE DATABASE IF NOT EXISTS sneakx_db;
    ```
-
-2. **Configure Environment Variables**:  
-   Create an environment configuration or provide environment variables:
+2. Set your environment variables (or rely on defaults in `application.yml`):
 
    | Variable Name | Description | Default / Example Value |
    | :--- | :--- | :--- |
-   | `DB_HOST` | MySQL hostname | `localhost` |
+   | `DB_HOST` | MySQL hostname | `localhost` (or cloud host) |
    | `DB_PORT` | MySQL port | `3306` |
    | `DB_NAME` | Database name | `sneakx_db` |
-   | `DB_USERNAME` | MySQL user | `root` |
-   | `DB_PASSWORD` | MySQL user password | *(your local password)* |
+   | `DB_USERNAME` | MySQL user | `root` (or cloud user) |
+   | `DB_PASSWORD` | MySQL user password | *(your local/cloud password)* |
    | `DB_SSL_MODE` | SSL requirement | `PREFERRED` (or `REQUIRED` for cloud) |
    | `JWT_SECRET` | 256-bit signing key | *(min 32 character secret)* |
    | `JWT_EXPIRATION` | Token expiry in ms | `86400000` (24 hours) |
@@ -321,14 +326,14 @@ cd sneakx-ecommerce
    | `RAZORPAY_KEY_ID` | *(Optional)* Razorpay Key ID | `rzp_test_...` |
    | `RAZORPAY_KEY_SECRET` | *(Optional)* Razorpay Secret | `...` |
 
-   > **Note on Email & Payments**: If `BREVO_API_KEY` and `MAIL_HOST` are omitted, SneakX operates in **Safe Development Fallback Mode**, generating formatted order receipts directly to server console logs without crashing.
+   > **Note on Email & Payments**: If `BREVO_API_KEY` and `MAIL_HOST` are omitted, SneakX operates in **Safe Development Fallback Mode**, generating formatted order receipts directly to server console logs without crashing or failing checkout.
 
-3. **Build & Run Backend**:
+3. Start the backend:
    ```bash
    cd backend
    mvn clean spring-boot:run
    ```
-   *The backend will boot on `http://localhost:8080`. Seed data (37 sneakers, 7 brands, admin, and customer accounts) loads automatically on first boot.*
+   *The backend will boot on `http://localhost:8080`.*
 
 ---
 
