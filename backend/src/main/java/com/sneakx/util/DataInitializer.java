@@ -85,12 +85,21 @@ public class DataInitializer implements CommandLineRunner {
 
         if (adminExists && customerExists) {
             userRepository.findByEmail("admin@sneakx.in").ifPresent(existingAdmin -> {
+                boolean updated = false;
                 if ("Alex".equalsIgnoreCase(existingAdmin.getFirstName())) {
                     existingAdmin.setFirstName("Om");
                     existingAdmin.setLastName("Rindhe");
                     existingAdmin.setPhone("+91 98765 43210");
-                    userRepository.save(existingAdmin);
+                    updated = true;
                     log.info("[DataInitializer] Migrated legacy admin account details.");
+                }
+                if (!passwordEncoder.matches("ChangeMe123!", existingAdmin.getPasswordHash())) {
+                    existingAdmin.setPasswordHash(passwordEncoder.encode("ChangeMe123!"));
+                    updated = true;
+                    log.info("[DataInitializer] Updated existing admin password to new credential.");
+                }
+                if (updated) {
+                    userRepository.save(existingAdmin);
                 }
             });
             log.debug("[DataInitializer] Seed users already exist. Skipping user seeding.");
