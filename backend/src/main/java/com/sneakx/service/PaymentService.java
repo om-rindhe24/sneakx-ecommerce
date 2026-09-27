@@ -136,6 +136,7 @@ public class PaymentService {
         CheckoutRequest checkoutRequest = new CheckoutRequest();
         checkoutRequest.setAddressId(request.getAddressId());
         checkoutRequest.setNewAddress(request.getNewAddress());
+        checkoutRequest.setSaveAddress(request.getSaveAddress());
         checkoutRequest.setPaymentMethod("RAZORPAY");
         checkoutRequest.setPaymentReference(request.getRazorpayPaymentId());
 

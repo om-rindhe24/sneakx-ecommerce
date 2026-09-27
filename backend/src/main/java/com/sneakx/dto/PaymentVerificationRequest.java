@@ -15,9 +15,18 @@ public class PaymentVerificationRequest {
 
     private Long addressId;
     private CreateAddressRequest newAddress;
+    private Boolean saveAddress;
     private Long orderId;
 
     public PaymentVerificationRequest() {}
+
+    public Boolean getSaveAddress() {
+        return saveAddress;
+    }
+
+    public void setSaveAddress(Boolean saveAddress) {
+        this.saveAddress = saveAddress;
+    }
 
     public String getRazorpayOrderId() {
         return razorpayOrderId;

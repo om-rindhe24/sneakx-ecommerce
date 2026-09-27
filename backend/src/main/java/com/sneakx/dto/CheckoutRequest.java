@@ -10,12 +10,22 @@ public class CheckoutRequest {
     // Optional inline address creation if addressId is null
     private CreateAddressRequest newAddress;
 
+    private Boolean saveAddress;
+
     @NotBlank(message = "Payment method is required")
     private String paymentMethod = "COD"; // COD, SIMULATED_CARD, SIMULATED_UPI
 
     private String paymentReference;
 
     public CheckoutRequest() {}
+
+    public Boolean getSaveAddress() {
+        return saveAddress;
+    }
+
+    public void setSaveAddress(Boolean saveAddress) {
+        this.saveAddress = saveAddress;
+    }
 
     public Long getAddressId() {
         return addressId;

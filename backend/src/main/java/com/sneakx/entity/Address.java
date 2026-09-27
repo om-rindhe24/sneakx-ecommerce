@@ -107,4 +107,21 @@ public class Address extends BaseEntity {
     public void setIsDefault(Boolean isDefault) {
         this.isDefault = isDefault;
     }
+
+    // Convenience aliases for requirement parity
+    public String getPhoneNumber() {
+        return phone;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phone = phoneNumber;
+    }
+
+    public String getPinCode() {
+        return postalCode;
+    }
+
+    public void setPinCode(String pinCode) {
+        this.postalCode = pinCode;
+    }
 }

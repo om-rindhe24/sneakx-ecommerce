@@ -72,16 +72,27 @@ public class OrderService {
             }
         } else if (request.getNewAddress() != null) {
             CreateAddressRequest req = request.getNewAddress();
+            boolean isDefault = Boolean.TRUE.equals(req.getIsDefault());
+            if (isDefault) {
+                List<Address> userAddresses = addressRepository.findByUserId(userId);
+                for (Address a : userAddresses) {
+                    if (Boolean.TRUE.equals(a.getIsDefault())) {
+                        a.setIsDefault(false);
+                        addressRepository.save(a);
+                    }
+                }
+            }
+
             address = new Address();
             address.setUser(user);
-            address.setFullName(req.getFullName());
-            address.setPhone(req.getPhone());
-            address.setStreetAddress(req.getStreetAddress());
-            address.setCity(req.getCity());
-            address.setState(req.getState());
-            address.setPostalCode(req.getPostalCode());
-            address.setCountry(req.getCountry() != null ? req.getCountry() : "India");
-            address.setIsDefault(req.getIsDefault());
+            address.setFullName(req.getFullName().trim());
+            address.setPhone(req.getPhone().trim());
+            address.setStreetAddress(req.getStreetAddress().trim());
+            address.setCity(req.getCity().trim());
+            address.setState(req.getState().trim());
+            address.setPostalCode(req.getPostalCode().trim());
+            address.setCountry(req.getCountry() != null && !req.getCountry().isBlank() ? req.getCountry().trim() : "India");
+            address.setIsDefault(isDefault);
             address = addressRepository.save(address);
         } else {
             throw new BadRequestException("A valid delivery address is required for checkout.");

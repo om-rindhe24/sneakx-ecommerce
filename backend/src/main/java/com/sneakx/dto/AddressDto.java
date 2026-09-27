@@ -1,17 +1,38 @@
 package com.sneakx.dto;
 
+import com.sneakx.entity.Address;
+
 public class AddressDto {
     private Long id;
     private String fullName;
     private String phone;
+    private String phoneNumber;
     private String streetAddress;
     private String city;
     private String state;
     private String postalCode;
+    private String pinCode;
     private String country;
     private Boolean isDefault;
 
     public AddressDto() {}
+
+    public static AddressDto fromEntity(Address address) {
+        if (address == null) return null;
+        AddressDto dto = new AddressDto();
+        dto.setId(address.getId());
+        dto.setFullName(address.getFullName());
+        dto.setPhone(address.getPhone());
+        dto.setPhoneNumber(address.getPhone());
+        dto.setStreetAddress(address.getStreetAddress());
+        dto.setCity(address.getCity());
+        dto.setState(address.getState());
+        dto.setPostalCode(address.getPostalCode());
+        dto.setPinCode(address.getPostalCode());
+        dto.setCountry(address.getCountry());
+        dto.setIsDefault(Boolean.TRUE.equals(address.getIsDefault()));
+        return dto;
+    }
 
     public Long getId() {
         return id;
@@ -30,11 +51,25 @@ public class AddressDto {
     }
 
     public String getPhone() {
-        return phone;
+        return phone != null ? phone : phoneNumber;
     }
 
     public void setPhone(String phone) {
         this.phone = phone;
+        if (this.phoneNumber == null) {
+            this.phoneNumber = phone;
+        }
+    }
+
+    public String getPhoneNumber() {
+        return phoneNumber != null ? phoneNumber : phone;
+    }
+
+    public void setPhoneNumber(String phoneNumber) {
+        this.phoneNumber = phoneNumber;
+        if (this.phone == null) {
+            this.phone = phoneNumber;
+        }
     }
 
     public String getStreetAddress() {
@@ -62,11 +97,25 @@ public class AddressDto {
     }
 
     public String getPostalCode() {
-        return postalCode;
+        return postalCode != null ? postalCode : pinCode;
     }
 
     public void setPostalCode(String postalCode) {
         this.postalCode = postalCode;
+        if (this.pinCode == null) {
+            this.pinCode = postalCode;
+        }
+    }
+
+    public String getPinCode() {
+        return pinCode != null ? pinCode : postalCode;
+    }
+
+    public void setPinCode(String pinCode) {
+        this.pinCode = pinCode;
+        if (this.postalCode == null) {
+            this.postalCode = pinCode;
+        }
     }
 
     public String getCountry() {

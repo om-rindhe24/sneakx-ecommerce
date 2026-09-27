@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
 import { orderService } from '../services/orderService';
 import { paymentService } from '../services/paymentService';
+import { addressService } from '../services/addressService';
 import {
   ShieldCheck,
   CreditCard,
@@ -17,7 +18,9 @@ import {
   Info,
   ExternalLink,
   Building2,
-  Wallet
+  Wallet,
+  MapPin,
+  Plus
 } from 'lucide-react';
 
 export const CheckoutPage = () => {
@@ -36,6 +39,57 @@ export const CheckoutPage = () => {
     country: 'India',
     isDefault: true
   });
+
+  // Saved Addresses State
+  const [savedAddresses, setSavedAddresses] = useState([]);
+  const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+  const [saveAddressForFuture, setSaveAddressForFuture] = useState(true);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
+
+  // Fetch saved addresses on mount for authenticated users
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAddresses = async () => {
+      if (!user) {
+        setIsAddingNewAddress(true);
+        setSelectedAddressId('NEW');
+        return;
+      }
+
+      try {
+        setLoadingAddresses(true);
+        const addresses = await addressService.getAddresses();
+        if (isMounted) {
+          const list = Array.isArray(addresses) ? addresses : [];
+          setSavedAddresses(list);
+          if (list.length > 0) {
+            const defaultAddr = list.find((a) => a.isDefault) || list[0];
+            setSelectedAddressId(defaultAddr.id);
+            setIsAddingNewAddress(false);
+          } else {
+            setIsAddingNewAddress(true);
+            setSelectedAddressId('NEW');
+          }
+        }
+      } catch (err) {
+        console.warn('[CHECKOUT-ADDRESS-FETCH-ERROR]', err);
+        if (isMounted) {
+          setIsAddingNewAddress(true);
+          setSelectedAddressId('NEW');
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAddresses(false);
+        }
+      }
+    };
+
+    fetchAddresses();
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
 
   // Pre-fill user profile if available
   useEffect(() => {
@@ -63,6 +117,14 @@ export const CheckoutPage = () => {
   }).format(cart.total || 0);
 
   const validateInputs = () => {
+    // If a saved address is chosen, no form inputs need validation
+    if (!isAddingNewAddress && selectedAddressId && selectedAddressId !== 'NEW') {
+      const selected = savedAddresses.find((a) => a.id === selectedAddressId);
+      if (selected) {
+        return true;
+      }
+    }
+
     if (
       !shippingAddress.fullName?.trim() ||
       !shippingAddress.phone?.trim() ||
@@ -89,6 +151,22 @@ export const CheckoutPage = () => {
     if (!validateInputs()) {
       return;
     }
+
+    // Resolve destination address payload
+    const selectedSavedAddress = savedAddresses.find((a) => a.id === selectedAddressId);
+    const isUsingSaved = !isAddingNewAddress && Boolean(selectedSavedAddress);
+    const recipientName = (isUsingSaved ? selectedSavedAddress.fullName : shippingAddress.fullName) || user?.fullName || '';
+    const recipientPhone = ((isUsingSaved ? (selectedSavedAddress.phone || selectedSavedAddress.phoneNumber) : shippingAddress.phone) || user?.phone || '').replace(/\D/g, '').slice(-10) || '9876543210';
+
+    const checkoutAddressPayload = isUsingSaved
+      ? { addressId: selectedSavedAddress.id }
+      : {
+          newAddress: {
+            ...shippingAddress,
+            saveAddress: saveAddressForFuture
+          },
+          saveAddress: saveAddressForFuture
+        };
 
     // -------------------------------------------------------------
     // FLOW 1: Authentic Razorpay Gateway Integration (Test Mode)
@@ -131,7 +209,7 @@ export const CheckoutPage = () => {
                 razorpayOrderId: response.razorpay_order_id,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature,
-                newAddress: shippingAddress
+                ...checkoutAddressPayload
               });
 
               await refreshCart();
@@ -148,9 +226,9 @@ export const CheckoutPage = () => {
             }
           },
           prefill: {
-            name: shippingAddress.fullName || user?.fullName || '',
+            name: recipientName,
             email: user?.email || '',
-            contact: (shippingAddress.phone || user?.phone || '').replace(/\D/g, '').slice(-10) || '9876543210'
+            contact: recipientPhone
           },
           config: {
             display: {
@@ -181,7 +259,7 @@ export const CheckoutPage = () => {
           },
           notes: {
             merchant_reference: 'SneakX Official Store',
-            customer_name: shippingAddress.fullName
+            customer_name: recipientName
           },
           theme: {
             color: '#FF3B30'
@@ -220,9 +298,9 @@ export const CheckoutPage = () => {
 
       try {
         const order = await orderService.checkout({
-          newAddress: shippingAddress,
           paymentMethod: 'COD',
-          paymentReference: 'COD_VERIFIED'
+          paymentReference: 'COD_VERIFIED',
+          ...checkoutAddressPayload
         });
 
         await refreshCart();
@@ -259,85 +337,274 @@ export const CheckoutPage = () => {
             boxShadow: 'var(--shadow-card)',
             padding: 'clamp(16px, 3.5vw, 24px)'
           }}>
-            <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '16px' }}>
-              1. Delivery Destination
-            </h2>
-
-            <div className="checkout-row-2">
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Full Name</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Rahul Sharma"
-                  value={shippingAddress.fullName}
-                  onChange={(e) => setShippingAddress({ ...shippingAddress, fullName: e.target.value })}
-                  required
-                />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h2 style={{ fontSize: '18px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  1. Delivery Destination
+                </h2>
+                {user && savedAddresses.length > 0 && (
+                  <span className="badge badge-info" style={{ fontSize: '11px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                    <MapPin size={11} /> {savedAddresses.length} Saved {savedAddresses.length === 1 ? 'Address' : 'Addresses'}
+                  </span>
+                )}
               </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">Phone Number</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. +91 98765 43210"
-                  value={shippingAddress.phone}
-                  onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
-                  required
-                />
-              </div>
+              {/* Cancel add-new button to return to saved address list */}
+              {isAddingNewAddress && savedAddresses.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingNewAddress(false);
+                    const defaultAddr = savedAddresses.find((a) => a.isDefault) || savedAddresses[0];
+                    setSelectedAddressId(defaultAddr?.id || null);
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-primary)',
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    padding: '4px 8px',
+                    borderRadius: 'var(--radius-sm)'
+                  }}
+                >
+                  Cancel & choose saved address
+                </button>
+              )}
             </div>
 
-            <div className="form-group" style={{ marginTop: '14px', marginBottom: 0 }}>
-              <label className="form-label">Street Address</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Flat / House No., Street, Landmark"
-                value={shippingAddress.streetAddress}
-                onChange={(e) => setShippingAddress({ ...shippingAddress, streetAddress: e.target.value })}
-                required
-              />
-            </div>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '18px' }}>
+              {isAddingNewAddress
+                ? 'Fill out the delivery destination fields below.'
+                : 'Select an address from your saved addresses, or add a new delivery location.'}
+            </p>
 
-            <div className="checkout-row-3" style={{ marginTop: '14px' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">City</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Bengaluru"
-                  value={shippingAddress.city}
-                  onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
-                  required
-                />
+            {loadingAddresses ? (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '32px 0', gap: '8px', color: 'var(--text-muted)', fontSize: '13px' }}>
+                <Loader2 size={18} className="spin-animation" />
+                <span>Loading saved addresses...</span>
               </div>
+            ) : !isAddingNewAddress && savedAddresses.length > 0 ? (
+              /* Saved Address Cards Grid */
+              <div className="checkout-row-2" style={{ gap: '14px' }}>
+                {savedAddresses.map((addr) => {
+                  const isSelected = selectedAddressId === addr.id;
+                  return (
+                    <div
+                      key={addr.id}
+                      onClick={() => setSelectedAddressId(addr.id)}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedAddressId(addr.id); }}
+                      className={`payment-card-option ${isSelected ? 'is-active-razorpay' : ''}`}
+                      style={{
+                        padding: '16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
+                        gap: '12px',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {/* Top Header: Radio + Full Name + Default Badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                          <div style={{
+                            width: '18px',
+                            height: '18px',
+                            borderRadius: '50%',
+                            border: isSelected ? '2px solid var(--accent-primary)' : '2px solid var(--text-muted)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}>
+                            {isSelected && (
+                              <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: 'var(--accent-primary)' }} />
+                            )}
+                          </div>
+                          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {addr.fullName}
+                          </span>
+                        </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">State</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. Karnataka"
-                  value={shippingAddress.state}
-                  onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value })}
-                  required
-                />
-              </div>
+                        {addr.isDefault && (
+                          <span style={{
+                            fontSize: '9.5px',
+                            fontWeight: 800,
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.06em',
+                            padding: '2px 7px',
+                            borderRadius: '4px',
+                            backgroundColor: isSelected ? 'var(--accent-primary)' : 'rgba(255,255,255,0.08)',
+                            color: '#FFFFFF',
+                            flexShrink: 0
+                          }}>
+                            Default
+                          </span>
+                        )}
+                      </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">PIN Code</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. 560001"
-                  value={shippingAddress.postalCode}
-                  onChange={(e) => setShippingAddress({ ...shippingAddress, postalCode: e.target.value })}
-                  required
-                />
+                      {/* Address Details */}
+                      <div style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        <div style={{ color: 'var(--text-primary)', fontWeight: 500 }}>
+                          {addr.streetAddress}
+                        </div>
+                        <div>
+                          {addr.city}, {addr.state} {addr.postalCode || addr.pinCode ? `- ${addr.postalCode || addr.pinCode}` : ''}
+                        </div>
+                        <div style={{ color: 'var(--text-muted)', fontSize: '12px', marginTop: '2px' }}>
+                          Phone: {addr.phone || addr.phoneNumber}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* + Add New Address Card */}
+                <div
+                  onClick={() => {
+                    setIsAddingNewAddress(true);
+                    setSelectedAddressId('NEW');
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { setIsAddingNewAddress(true); setSelectedAddressId('NEW'); } }}
+                  className="payment-card-option"
+                  style={{
+                    padding: '20px 16px',
+                    border: '1.5px dashed var(--border-medium)',
+                    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textAlign: 'center',
+                    minHeight: '130px',
+                    gap: '8px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{
+                    width: '36px',
+                    height: '36px',
+                    borderRadius: '50%',
+                    backgroundColor: 'rgba(255, 59, 48, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Plus size={18} color="var(--accent-primary)" />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '14px', color: 'var(--text-primary)' }}>
+                      + Add New Address
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Deliver to a new location
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* Inline Address Form (for new users, guest users, or when "+ Add New Address" is active) */
+              <div>
+                <div className="checkout-row-2">
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Full Name</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Rahul Sharma"
+                      value={shippingAddress.fullName}
+                      onChange={(e) => setShippingAddress({ ...shippingAddress, fullName: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">Phone Number</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. +91 98765 43210"
+                      value={shippingAddress.phone}
+                      onChange={(e) => setShippingAddress({ ...shippingAddress, phone: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ marginTop: '14px', marginBottom: 0 }}>
+                  <label className="form-label">Street Address</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Flat / House No., Street, Landmark"
+                    value={shippingAddress.streetAddress}
+                    onChange={(e) => setShippingAddress({ ...shippingAddress, streetAddress: e.target.value })}
+                    required
+                  />
+                </div>
+
+                <div className="checkout-row-3" style={{ marginTop: '14px' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">City</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Bengaluru"
+                      value={shippingAddress.city}
+                      onChange={(e) => setShippingAddress({ ...shippingAddress, city: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">State</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. Karnataka"
+                      value={shippingAddress.state}
+                      onChange={(e) => setShippingAddress({ ...shippingAddress, state: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label className="form-label">PIN Code</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="e.g. 560001"
+                      value={shippingAddress.postalCode}
+                      onChange={(e) => setShippingAddress({ ...shippingAddress, postalCode: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                {user && (
+                  <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="checkbox"
+                      id="saveAddressCheckbox"
+                      checked={saveAddressForFuture}
+                      onChange={(e) => setSaveAddressForFuture(e.target.checked)}
+                      style={{ accentColor: 'var(--accent-primary)', width: '16px', height: '16px', cursor: 'pointer' }}
+                    />
+                    <label htmlFor="saveAddressCheckbox" style={{ fontSize: '13px', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      Save this address to my profile for faster checkout next time
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Section 2: Payment Method Selection */}
