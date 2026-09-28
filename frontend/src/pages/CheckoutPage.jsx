@@ -1185,14 +1185,14 @@ export const CheckoutContent = () => {
                       handleApplyCoupon();
                     }
                   }}
-                  placeholder="e.g. SNEAK10"
-                  className="form-input"
+                  placeholder="Enter coupon code"
+                  className="form-input coupon-input"
                   style={{
                     padding: '8px 12px',
                     fontSize: '13px',
-                    fontFamily: 'var(--font-family-mono)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.05em',
+                    fontFamily: couponCodeInput ? 'var(--font-family-mono)' : 'inherit',
+                    textTransform: couponCodeInput ? 'uppercase' : 'none',
+                    letterSpacing: couponCodeInput ? '0.05em' : 'normal',
                     height: '38px',
                     flex: 1
                   }}

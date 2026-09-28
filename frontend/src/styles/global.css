@@ -89,6 +89,13 @@ input::placeholder, textarea::placeholder, .form-input::placeholder {
   opacity: 1;
 }
 
+.coupon-input::placeholder {
+  text-transform: none;
+  font-family: inherit;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+
 input:focus, select:focus, textarea:focus, .form-input:focus {
   background-color: #232734;
   border-color: var(--accent-primary);
