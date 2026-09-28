@@ -270,5 +270,28 @@ Status Legend:
 - [x] Ensure total price calculation and charged amount remain 100% unaltered
 - [x] Verify frontend build (`npm run build` -> built in 9.73s, 0 errors)
 
+---
+
+## PHASE 26 — Coupon & Discount Codes Engine
+- [x] Create `Coupon.java` JPA entity supporting percentage, max discount cap, flat discount, min order amount, expiry, usage limit, and one-per-user restriction
+- [x] Add `couponCode`, `discountAmount`, and `subtotal` fields to `Order.java` entity
+- [x] Implement `CouponRepository.java` and `existsByUserIdAndCouponCodeIgnoreCaseAndStatusNot` query in `OrderRepository.java`
+- [x] Create request/response DTOs: `CouponDto`, `CreateCouponRequest`, `ValidateCouponRequest`, `CouponValidationResponse`, and update checkout DTOs
+- [x] Implement `CouponService.java` with server-side validation logic and admin CRUD operations
+- [x] Update `OrderService.java` and `PaymentService.java` to enforce coupon validation, deduct discount, and track usage count
+- [x] Update `EmailService.java` with discount line item in HTML order confirmation receipt and ASCII console fallback
+- [x] Seed initial coupons in `DataInitializer.java` (`SNEAK10`, `FLAT500`, `GRAIL20`)
+- [x] Expose customer validation endpoint `POST /api/coupons/validate` in `CouponController.java`
+- [x] Expose admin coupon endpoints (`GET`, `POST`, `PUT /{id}`, `PATCH /{id}/toggle`, `DELETE /{id}`) in `AdminCouponController.java`
+- [x] Author comprehensive backend test suite in `CouponServiceTest.java` (10 tests; entire test suite passing with 44/44 tests)
+- [x] Create `couponService.js` client in frontend
+- [x] Update `CheckoutPage.jsx` with coupon input, apply/remove actions, inline validation errors, and dynamic Discount price breakdown row
+- [x] Synchronize Razorpay and COD order creation with validated `couponCode`
+- [x] Update `OrderConfirmationPage.jsx` to display Subtotal, applied discount, and net total
+- [x] Update `OrdersPage.jsx` to render green coupon badge on customer order cards
+- [x] Implement full coupon management tab in `AdminDashboardPage.jsx` (create, list, toggle, delete, track usage count)
+- [x] Verify frontend production build (`npm run build` -> 0 errors)
+
+
 
 

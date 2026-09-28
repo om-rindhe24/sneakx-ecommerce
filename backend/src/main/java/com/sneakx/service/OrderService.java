@@ -31,6 +31,8 @@ public class OrderService {
     private final UserRepository userRepository;
     private final ProductVariantRepository variantRepository;
     private final EmailService emailService;
+    private final CouponService couponService;
+    private final CouponRepository couponRepository;
 
     public OrderService(OrderRepository orderRepository,
                         OrderItemRepository orderItemRepository,
@@ -39,7 +41,9 @@ public class OrderService {
                         AddressRepository addressRepository,
                         UserRepository userRepository,
                         ProductVariantRepository variantRepository,
-                        EmailService emailService) {
+                        EmailService emailService,
+                        CouponService couponService,
+                        CouponRepository couponRepository) {
         this.orderRepository = orderRepository;
         this.orderItemRepository = orderItemRepository;
         this.cartRepository = cartRepository;
@@ -48,6 +52,8 @@ public class OrderService {
         this.userRepository = userRepository;
         this.variantRepository = variantRepository;
         this.emailService = emailService;
+        this.couponService = couponService;
+        this.couponRepository = couponRepository;
     }
 
     @Transactional
@@ -131,15 +137,38 @@ public class OrderService {
             subtotal = subtotal.add(orderItem.getSubtotal());
         }
 
-        // 3. Calculate Final Total (Free shipping over 5000)
+        // 3. Calculate Discount and Final Total
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        String appliedCouponCode = null;
+
+        if (request.getCouponCode() != null && !request.getCouponCode().trim().isBlank()) {
+            CouponValidationResponse couponResp = couponService.validateCoupon(userId, request.getCouponCode(), subtotal);
+            discountAmount = couponResp.getDiscountAmount();
+            appliedCouponCode = couponResp.getCode();
+
+            Coupon couponEntity = couponRepository.findByCodeIgnoreCase(appliedCouponCode).orElse(null);
+            if (couponEntity != null) {
+                couponEntity.setUsageCount(couponEntity.getUsageCount() + 1);
+                couponRepository.save(couponEntity);
+            }
+        }
+
+        BigDecimal discountedSubtotal = subtotal.subtract(discountAmount);
+        if (discountedSubtotal.compareTo(BigDecimal.ZERO) < 0) {
+            discountedSubtotal = BigDecimal.ZERO;
+        }
+
         BigDecimal shipping = subtotal.compareTo(BigDecimal.valueOf(5000)) >= 0 ? BigDecimal.ZERO : BigDecimal.valueOf(250);
-        BigDecimal totalAmount = subtotal.add(shipping);
+        BigDecimal totalAmount = discountedSubtotal.add(shipping);
 
         // 4. Create and Save Order
         Order order = new Order();
         order.setOrderNumber("SNK-" + System.currentTimeMillis() % 1000000 + "-" + UUID.randomUUID().toString().substring(0, 4).toUpperCase());
         order.setUser(user);
         order.setAddress(address);
+        order.setSubtotal(subtotal);
+        order.setDiscountAmount(discountAmount);
+        order.setCouponCode(appliedCouponCode);
         order.setTotalAmount(totalAmount);
         order.setStatus("CONFIRMED");
         order.setPaymentMethod(request.getPaymentMethod() != null ? request.getPaymentMethod() : "COD");
@@ -239,6 +268,9 @@ public class OrderService {
         dto.setCustomerName(order.getUser() != null ? order.getUser().getFullName() : "Customer");
         dto.setCustomerEmail(order.getUser() != null ? order.getUser().getEmail() : "");
         dto.setTotalAmount(order.getTotalAmount());
+        dto.setSubtotal(order.getSubtotal() != null ? order.getSubtotal() : order.getTotalAmount());
+        dto.setDiscountAmount(order.getDiscountAmount());
+        dto.setCouponCode(order.getCouponCode());
         dto.setStatus(order.getStatus());
         dto.setPaymentMethod(order.getPaymentMethod());
         dto.setPaymentStatus(order.getPaymentStatus());

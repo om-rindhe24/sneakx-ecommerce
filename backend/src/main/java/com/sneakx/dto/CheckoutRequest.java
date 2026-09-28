@@ -17,6 +17,8 @@ public class CheckoutRequest {
 
     private String paymentReference;
 
+    private String couponCode;
+
     public CheckoutRequest() {}
 
     public Boolean getSaveAddress() {
@@ -57,5 +59,13 @@ public class CheckoutRequest {
 
     public void setPaymentReference(String paymentReference) {
         this.paymentReference = paymentReference;
+    }
+
+    public String getCouponCode() {
+        return couponCode;
+    }
+
+    public void setCouponCode(String couponCode) {
+        this.couponCode = couponCode;
     }
 }

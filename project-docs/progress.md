@@ -232,6 +232,36 @@
     - Preserved calculation and billing integrity: final total and charged amount remain unchanged since 18% GST is already included in item pricing.
 - **Testing & Verification**:
   - `npm run build`: Vite production bundle compiled cleanly in 9.73s with zero errors.
-- **Result**: Complete transparency and parity between pre-payment summary and post-payment confirmation receipt.
+---
+
+### Entry 9
+- **Date**: 2026-09-28
+- **Phase**: COUPON & DISCOUNT CODES ENGINE (Customer Checkout & Admin Management)
+- **Task**: Implement a production-grade coupon code system across frontend and backend with server-side validation, flexible discount rules (percentage with max cap, flat discount, min order value, expiry date, usage limit, one-use-per-user), Razorpay and COD payment synchronization, order history breakdown, email receipt updates, and admin CRUD controls.
+- **What changed**:
+  - **Backend Core**:
+    - Created `Coupon.java` JPA entity with fields for code, discount type (`PERCENTAGE`, `FLAT`), discount value, max discount cap, min order amount, expiry date, total usage limit, usage count, one-per-user restriction, and active status flag.
+    - Updated `Order.java` entity to record `couponCode`, `discountAmount`, and `subtotal`.
+    - Created `CouponRepository.java` and updated `OrderRepository.java` (`existsByUserIdAndCouponCodeIgnoreCaseAndStatusNot`).
+    - Implemented `CouponService.java` with strict multi-layer server-side validation engine (active check, expiration, total usage limit, cart subtotal determination, min order threshold, one-per-user check, capped percentage or flat calculation) and Admin CRUD methods.
+    - Updated `OrderService.java` to enforce coupon validation at atomic checkout, deduct calculated discount from subtotal, record coupon details on order, and increment coupon usage count.
+    - Updated `PaymentService.java` to compute discounted order total on server before creating Razorpay order and verifying signatures.
+    - Updated `EmailService.java` to render discount line item in HTML order confirmation receipts and ASCII log fallback.
+    - Seeded initial coupons in `DataInitializer.java`: `SNEAK10` (10% off up to ₹2500, min order ₹3000), `FLAT500` (flat ₹500 off, min order ₹4000), `GRAIL20` (20% off up to ₹5000, min order ₹10000).
+    - Created `CouponController.java` (`POST /api/coupons/validate`) and `AdminCouponController.java` (`GET`, `POST`, `PUT /{id}`, `PATCH /{id}/toggle`, `DELETE /{id}` under `/api/admin/coupons`).
+    - Authored unit/integration tests in `CouponServiceTest.java` (10 test cases covering percentage calculation, discount cap, flat discount, invalid code, inactive code, expired coupon, subtotal below minimum, usage limit reached, one-per-user enforcement, and admin CRUD).
+  - **Frontend UI & Integration**:
+    - Created `couponService.js` client service for customer validation and admin operations.
+    - Enhanced `CheckoutPage.jsx` Order Summary with "Apply coupon" input, Apply button, inline error/success messages, dynamic "Discount" row between Subtotal and Tax/Shipping, updated Final Total, and "Remove" coupon action.
+    - Passed validated `couponCode` through both Razorpay and COD checkout flows.
+    - Updated `paymentService.js` to pass `couponCode` when creating payment orders.
+    - Updated `OrderConfirmationPage.jsx` to display Subtotal, applied Coupon Discount, and net total.
+    - Updated `OrdersPage.jsx` to render green coupon badge `[COUPON] (-₹X)` on customer order cards.
+    - Upgraded `AdminDashboardPage.jsx` with a dedicated Coupon Management tab featuring live statistics, coupon creation form, status toggles, deletion, and usage tracking table.
+- **Testing & Verification**:
+  - `mvn test`: 44/44 backend tests passed cleanly (BUILD SUCCESS).
+  - `npm run build`: Vite production bundle compiled cleanly in 14.00s with zero errors.
+- **Result**: Production-grade coupon and discount engine live, verified, and integrated end-to-end.
+
 
 

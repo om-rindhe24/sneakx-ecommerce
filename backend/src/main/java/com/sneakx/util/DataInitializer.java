@@ -33,6 +33,7 @@ public class DataInitializer implements CommandLineRunner {
     private final ProductImageRepository imageRepository;
     private final ReviewRepository reviewRepository;
     private final AddressRepository addressRepository;
+    private final CouponRepository couponRepository;
     private final PasswordEncoder passwordEncoder;
 
     public DataInitializer(RoleRepository roleRepository,
@@ -44,6 +45,7 @@ public class DataInitializer implements CommandLineRunner {
                            ProductImageRepository imageRepository,
                            ReviewRepository reviewRepository,
                            AddressRepository addressRepository,
+                           CouponRepository couponRepository,
                            PasswordEncoder passwordEncoder) {
         this.roleRepository = roleRepository;
         this.userRepository = userRepository;
@@ -54,6 +56,7 @@ public class DataInitializer implements CommandLineRunner {
         this.imageRepository = imageRepository;
         this.reviewRepository = reviewRepository;
         this.addressRepository = addressRepository;
+        this.couponRepository = couponRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
@@ -68,6 +71,7 @@ public class DataInitializer implements CommandLineRunner {
         seedUsers();
         seedBrands();
         seedCategories();
+        seedCoupons();
 
         long productCount = productRepository.count();
         if (productCount == 0) {
@@ -82,6 +86,55 @@ public class DataInitializer implements CommandLineRunner {
     private void seedRoles() {
         roleRepository.save(new Role("ROLE_USER"));
         roleRepository.save(new Role("ROLE_ADMIN"));
+    }
+
+    private void seedCoupons() {
+        if (couponRepository.count() == 0) {
+            log.info("[DataInitializer] Seeding sample promotional coupons...");
+
+            Coupon sneak10 = new Coupon();
+            sneak10.setCode("SNEAK10");
+            sneak10.setDescription("10% off on all streetwear drops (Max ₹2,500)");
+            sneak10.setDiscountType("PERCENTAGE");
+            sneak10.setDiscountValue(new BigDecimal("10.00"));
+            sneak10.setMaxDiscountAmount(new BigDecimal("2500.00"));
+            sneak10.setMinOrderAmount(new BigDecimal("3000.00"));
+            sneak10.setExpiryDate(java.time.LocalDateTime.now().plusMonths(6));
+            sneak10.setTotalUsageLimit(500);
+            sneak10.setUsageCount(0);
+            sneak10.setOnePerUser(true);
+            sneak10.setIsActive(true);
+            couponRepository.save(sneak10);
+
+            Coupon flat500 = new Coupon();
+            flat500.setCode("FLAT500");
+            flat500.setDescription("Flat ₹500 off on orders above ₹4,000");
+            flat500.setDiscountType("FLAT");
+            flat500.setDiscountValue(new BigDecimal("500.00"));
+            flat500.setMinOrderAmount(new BigDecimal("4000.00"));
+            flat500.setExpiryDate(java.time.LocalDateTime.now().plusMonths(6));
+            flat500.setTotalUsageLimit(250);
+            flat500.setUsageCount(0);
+            flat500.setOnePerUser(true);
+            flat500.setIsActive(true);
+            couponRepository.save(flat500);
+
+            Coupon grail20 = new Coupon();
+            grail20.setCode("GRAIL20");
+            grail20.setDescription("20% off on grails above ₹10,000 (Max ₹5,000)");
+            grail20.setDiscountType("PERCENTAGE");
+            grail20.setDiscountValue(new BigDecimal("20.00"));
+            grail20.setMaxDiscountAmount(new BigDecimal("5000.00"));
+            grail20.setMinOrderAmount(new BigDecimal("10000.00"));
+            grail20.setExpiryDate(java.time.LocalDateTime.now().plusMonths(3));
+            grail20.setTotalUsageLimit(100);
+            grail20.setUsageCount(0);
+            grail20.setOnePerUser(true);
+            grail20.setIsActive(true);
+            couponRepository.save(grail20);
+
+            log.info("[DataInitializer] Seeded 3 sample coupons (SNEAK10, FLAT500, GRAIL20)");
+        }
     }
 
     private void seedUsers() {

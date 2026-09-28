@@ -282,21 +282,59 @@ export const OrderConfirmationPage = () => {
               </div>
             )}
 
-            {/* Billing Total */}
+            {/* Price Breakdown */}
             <div style={{
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
+              flexDirection: 'column',
+              gap: '8px',
               paddingTop: '16px',
               borderTop: '1px solid var(--border-subtle)',
-              fontSize: '16px',
-              fontWeight: 800,
-              color: 'var(--text-primary)'
+              fontSize: '13px',
+              color: 'var(--text-secondary)'
             }}>
-              <span>Order Total:</span>
-              <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--accent-primary)', fontSize: '20px' }}>
-                ₹{order.totalAmount?.toLocaleString('en-IN')}
-              </span>
+              {order.subtotal && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Subtotal</span>
+                  <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    ₹{order.subtotal?.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
+
+              {order.discountAmount && Number(order.discountAmount) > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--status-success)' }}>
+                  <span>Discount {order.couponCode ? `(${order.couponCode})` : ''}</span>
+                  <span style={{ fontFamily: 'var(--font-family-mono)', fontWeight: 700 }}>
+                    -₹{Number(order.discountAmount)?.toLocaleString('en-IN')}
+                  </span>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Tax</span>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Included in price (18% GST)</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Shipping</span>
+                <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--status-success)', fontWeight: 600 }}>FREE</span>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingTop: '12px',
+                borderTop: '1px solid var(--border-subtle)',
+                fontSize: '16px',
+                fontWeight: 800,
+                color: 'var(--text-primary)'
+              }}>
+                <span>Order Total:</span>
+                <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--accent-primary)', fontSize: '20px' }}>
+                  ₹{order.totalAmount?.toLocaleString('en-IN')}
+                </span>
+              </div>
             </div>
           </div>
         )}

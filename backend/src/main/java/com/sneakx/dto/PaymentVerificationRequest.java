@@ -17,6 +17,7 @@ public class PaymentVerificationRequest {
     private CreateAddressRequest newAddress;
     private Boolean saveAddress;
     private Long orderId;
+    private String couponCode;
 
     public PaymentVerificationRequest() {}
 
@@ -74,5 +75,13 @@ public class PaymentVerificationRequest {
 
     public void setOrderId(Long orderId) {
         this.orderId = orderId;
+    }
+
+    public String getCouponCode() {
+        return couponCode;
+    }
+
+    public void setCouponCode(String couponCode) {
+        this.couponCode = couponCode;
     }
 }

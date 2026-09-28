@@ -50,6 +50,7 @@ Authorization: Bearer <JWT_TOKEN>
 | **Reviews** | 2 | 2 | **Implemented & Verified** |
 | **Recommendations** | 3 | 3 | **Implemented & Verified** |
 | **Admin Controls** | 8 | 8 | **Implemented & Verified** |
+| **Coupons & Discounts** | 6 | 6 | **Implemented & Verified** |
 | **Health** | 1 | 1 | **Implemented & Verified** |
 
 ---
@@ -115,3 +116,12 @@ Authorization: Bearer <JWT_TOKEN>
 
 ### 3.10 System Health
 - `GET /api/health` — Service uptime, version, and server timestamp. *(Status: Implemented & Verified)*
+
+### 3.11 Coupons & Discount Codes
+- `POST /api/coupons/validate` — Validates coupon code against user cart subtotal, checks expiration, minimum order amount, total usage limits, and one-use-per-user restriction. Returns calculated discount amount and final total. *(Status: Implemented & Verified)*
+- `GET /api/admin/coupons` — Admin list of all coupons with usage counts, discount rules, active statuses, and creation timestamps. *(Status: Implemented & Verified)*
+- `POST /api/admin/coupons` — Admin endpoint to create new coupon (`PERCENTAGE` with optional max discount cap, or `FLAT`). *(Status: Implemented & Verified)*
+- `PUT /api/admin/coupons/{id}` — Admin endpoint to update existing coupon rules, limits, and expiry dates. *(Status: Implemented & Verified)*
+- `PATCH /api/admin/coupons/{id}/toggle` — Admin endpoint to toggle coupon active/inactive status. *(Status: Implemented & Verified)*
+- `DELETE /api/admin/coupons/{id}` — Admin endpoint to permanently delete a coupon. *(Status: Implemented & Verified)*
+

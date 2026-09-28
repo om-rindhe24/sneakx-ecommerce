@@ -6,8 +6,10 @@ export const paymentService = {
    * @param {number} amount - Amount in INR (optional; falls back to cart total if omitted)
    * @returns {Promise<{ orderId: string, amount: number, amountInPaise: number, currency: string, keyId: string }>}
    */
-  createOrder: async (amount) => {
-    const payload = amount ? { amount } : {};
+  createOrder: async (amount, couponCode) => {
+    const payload = {};
+    if (amount) payload.amount = amount;
+    if (couponCode) payload.couponCode = couponCode;
     const res = await api.post('/payments/create-order', payload);
     return res.data?.data || res.data;
   },

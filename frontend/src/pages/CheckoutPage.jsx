@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { orderService } from '../services/orderService';
 import { paymentService } from '../services/paymentService';
 import { addressService } from '../services/addressService';
+import { couponService } from '../services/couponService';
 import {
   ShieldCheck,
   CreditCard,
@@ -20,7 +21,9 @@ import {
   Building2,
   Wallet,
   MapPin,
-  Plus
+  Plus,
+  Tag,
+  X
 } from 'lucide-react';
 
 export const CheckoutPage = () => {
@@ -110,11 +113,60 @@ export const CheckoutPage = () => {
   const [processingStep, setProcessingStep] = useState('');
   const [error, setError] = useState(null);
 
-  const formattedTotal = new Intl.NumberFormat('en-IN', {
+  // Coupon State
+  const [couponCodeInput, setCouponCodeInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
+  const [couponError, setCouponError] = useState(null);
+  const [couponSuccess, setCouponSuccess] = useState(null);
+
+  // Pricing Calculations with Coupon Discount
+  const subtotal = cart.subtotal || 0;
+  const discountAmount = appliedCoupon?.discountAmount ? Number(appliedCoupon.discountAmount) : 0;
+  const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+  const shipping = cart.shipping !== undefined ? cart.shipping : (subtotal >= 5000 ? 0 : 250);
+  const finalTotal = discountedSubtotal + shipping;
+
+  const formattedFinalTotal = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0
-  }).format(cart.total || 0);
+  }).format(finalTotal);
+
+  const handleApplyCoupon = async (e) => {
+    if (e) e.preventDefault();
+    const code = couponCodeInput.trim().toUpperCase();
+    if (!code) {
+      setCouponError('Please enter a coupon code.');
+      return;
+    }
+
+    setCouponLoading(true);
+    setCouponError(null);
+    setCouponSuccess(null);
+
+    try {
+      const res = await couponService.validateCoupon(code, subtotal);
+      const couponData = res.data || res;
+      setAppliedCoupon(couponData);
+      setCouponSuccess(`✓ Coupon '${couponData.code}' applied successfully!`);
+      setCouponCodeInput('');
+    } catch (err) {
+      console.error('[COUPON-ERROR]', err);
+      const msg = err.response?.data?.message || err.message || 'Invalid coupon code';
+      setCouponError(msg);
+      setAppliedCoupon(null);
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponSuccess(null);
+    setCouponError(null);
+    setCouponCodeInput('');
+  };
 
   const validateInputs = () => {
     // If a saved address is chosen, no form inputs need validation
@@ -181,8 +233,8 @@ export const CheckoutPage = () => {
       setProcessingStep('Initiating secure Razorpay checkout order...');
 
       try {
-        // Step 1: Create Razorpay Order on Backend
-        const paymentOrder = await paymentService.createOrder(cart.total);
+        // Step 1: Create Razorpay Order on Backend with Discounted Amount
+        const paymentOrder = await paymentService.createOrder(finalTotal, appliedCoupon?.code);
 
         if (!paymentOrder || !paymentOrder.orderId) {
           throw new Error('Could not generate Razorpay order. Please try again.');
@@ -209,6 +261,7 @@ export const CheckoutPage = () => {
                 razorpayOrderId: response.razorpay_order_id,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature,
+                couponCode: appliedCoupon?.code,
                 ...checkoutAddressPayload
               });
 
@@ -300,6 +353,7 @@ export const CheckoutPage = () => {
         const order = await orderService.checkout({
           paymentMethod: 'COD',
           paymentReference: 'COD_VERIFIED',
+          couponCode: appliedCoupon?.code,
           ...checkoutAddressPayload
         });
 
@@ -1093,24 +1147,173 @@ export const CheckoutPage = () => {
             ))}
           </div>
 
+          {/* Coupon Input Section */}
+          <div style={{
+            padding: '14px 16px',
+            backgroundColor: 'var(--bg-primary)',
+            border: '1px solid var(--border-subtle)',
+            borderRadius: 'var(--radius-md)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>
+              <Tag size={15} color="var(--accent-primary)" />
+              <span>Apply Coupon</span>
+            </div>
+
+            {!appliedCoupon ? (
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  value={couponCodeInput}
+                  onChange={(e) => {
+                    setCouponCodeInput(e.target.value.toUpperCase());
+                    if (couponError) setCouponError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyCoupon();
+                    }
+                  }}
+                  placeholder="e.g. SNEAK10"
+                  className="form-input"
+                  style={{
+                    padding: '8px 12px',
+                    fontSize: '13px',
+                    fontFamily: 'var(--font-family-mono)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    height: '38px',
+                    flex: 1
+                  }}
+                  disabled={couponLoading}
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  disabled={couponLoading || !couponCodeInput.trim()}
+                  className="btn btn-secondary"
+                  style={{
+                    padding: '8px 16px',
+                    fontSize: '13px',
+                    fontWeight: 700,
+                    height: '38px',
+                    minWidth: '70px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {couponLoading ? <Loader2 size={14} className="animate-spin" /> : 'Apply'}
+                </button>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.25)',
+                borderRadius: 'var(--radius-sm)',
+                padding: '8px 12px'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <CheckCircle size={15} color="var(--status-success)" />
+                  <div>
+                    <span style={{ fontFamily: 'var(--font-family-mono)', fontWeight: 800, fontSize: '13px', color: 'var(--status-success)' }}>
+                      {appliedCoupon.code}
+                    </span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '6px' }}>
+                      (-₹{Number(appliedCoupon.discountAmount)?.toLocaleString('en-IN')})
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--accent-primary)',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: '2px 6px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                  }}
+                  title="Remove coupon"
+                >
+                  <X size={13} /> Remove
+                </button>
+              </div>
+            )}
+
+            {/* Coupon Inline Error Message */}
+            {couponError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px', color: 'var(--accent-primary)', marginTop: '2px' }}>
+                <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                <span>{couponError}</span>
+              </div>
+            )}
+
+            {/* Coupon Inline Success Message */}
+            {couponSuccess && !couponError && (
+              <div style={{ fontSize: '12px', color: 'var(--status-success)', marginTop: '2px' }}>
+                {couponSuccess}
+              </div>
+            )}
+          </div>
+
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Subtotal</span>
               <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>₹{cart.subtotal?.toLocaleString('en-IN')}</span>
             </div>
+
+            {/* Discount Row (Visible only when valid coupon applied) */}
+            {appliedCoupon && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <span style={{ color: 'var(--status-success)', fontWeight: 600 }}>Discount ({appliedCoupon.code})</span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveCoupon}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--accent-primary)',
+                      fontSize: '11px',
+                      cursor: 'pointer',
+                      textDecoration: 'underline',
+                      padding: 0
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+                <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--status-success)', fontWeight: 700 }}>
+                  -₹{Number(appliedCoupon.discountAmount)?.toLocaleString('en-IN')}
+                </span>
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span>Tax:</span>
               <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Included in price (18% GST)</span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Shipping</span>
-              <span style={{ fontFamily: 'var(--font-family-mono)', color: cart.shipping === 0 ? 'var(--status-success)' : 'var(--text-primary)', fontWeight: 600 }}>
-                {cart.shipping === 0 ? 'FREE' : `₹${cart.shipping}`}
+              <span style={{ fontFamily: 'var(--font-family-mono)', color: shipping === 0 ? 'var(--status-success)' : 'var(--text-primary)', fontWeight: 600 }}>
+                {shipping === 0 ? 'FREE' : `₹${shipping}`}
               </span>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
               <span>Final Total</span>
-              <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--accent-primary)' }}>{formattedTotal}</span>
+              <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--accent-primary)' }}>{formattedFinalTotal}</span>
             </div>
           </div>
 

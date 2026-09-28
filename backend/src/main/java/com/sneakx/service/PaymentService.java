@@ -30,6 +30,7 @@ public class PaymentService {
     private final OrderService orderService;
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
+    private final CouponService couponService;
 
     @Value("${app.razorpay.key-id:}")
     private String keyId;
@@ -39,10 +40,12 @@ public class PaymentService {
 
     public PaymentService(OrderService orderService,
                           OrderRepository orderRepository,
-                          CartRepository cartRepository) {
+                          CartRepository cartRepository,
+                          CouponService couponService) {
         this.orderService = orderService;
         this.orderRepository = orderRepository;
         this.cartRepository = cartRepository;
+        this.couponService = couponService;
     }
 
     /**
@@ -53,23 +56,30 @@ public class PaymentService {
             throw new BadRequestException("Razorpay payment gateway credentials are not configured.");
         }
 
-        BigDecimal amount = request != null ? request.getAmount() : null;
-
-        // If amount was not explicitly provided in request, calculate from user's active cart
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            Cart cart = cartRepository.findByUserId(userId)
-                    .orElseThrow(() -> new BadRequestException("No active shopping cart found."));
-            if (cart.getItems() == null || cart.getItems().isEmpty()) {
-                throw new BadRequestException("Cart is empty.");
-            }
-
-            BigDecimal subtotal = BigDecimal.ZERO;
-            for (CartItem item : cart.getItems()) {
-                subtotal = subtotal.add(item.getVariant().getEffectivePrice().multiply(BigDecimal.valueOf(item.getQuantity())));
-            }
-            BigDecimal shipping = subtotal.compareTo(BigDecimal.valueOf(5000)) >= 0 ? BigDecimal.ZERO : BigDecimal.valueOf(250);
-            amount = subtotal.add(shipping);
+        Cart cart = cartRepository.findByUserId(userId)
+                .orElseThrow(() -> new BadRequestException("No active shopping cart found."));
+        if (cart.getItems() == null || cart.getItems().isEmpty()) {
+            throw new BadRequestException("Cart is empty.");
         }
+
+        BigDecimal subtotal = BigDecimal.ZERO;
+        for (CartItem item : cart.getItems()) {
+            subtotal = subtotal.add(item.getVariant().getEffectivePrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+        }
+
+        BigDecimal discountAmount = BigDecimal.ZERO;
+        if (request != null && request.getCouponCode() != null && !request.getCouponCode().trim().isBlank()) {
+            CouponValidationResponse couponResp = couponService.validateCoupon(userId, request.getCouponCode(), subtotal);
+            discountAmount = couponResp.getDiscountAmount();
+        }
+
+        BigDecimal discountedSubtotal = subtotal.subtract(discountAmount);
+        if (discountedSubtotal.compareTo(BigDecimal.ZERO) < 0) {
+            discountedSubtotal = BigDecimal.ZERO;
+        }
+
+        BigDecimal shipping = subtotal.compareTo(BigDecimal.valueOf(5000)) >= 0 ? BigDecimal.ZERO : BigDecimal.valueOf(250);
+        BigDecimal amount = discountedSubtotal.add(shipping);
 
         // Razorpay expects amount in smallest currency unit (paise for INR)
         long amountInPaise = amount.multiply(BigDecimal.valueOf(100)).longValue();
@@ -139,6 +149,7 @@ public class PaymentService {
         checkoutRequest.setSaveAddress(request.getSaveAddress());
         checkoutRequest.setPaymentMethod("RAZORPAY");
         checkoutRequest.setPaymentReference(request.getRazorpayPaymentId());
+        checkoutRequest.setCouponCode(request.getCouponCode());
 
         return orderService.checkout(userId, checkoutRequest);
     }

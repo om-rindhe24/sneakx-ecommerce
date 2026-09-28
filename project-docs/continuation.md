@@ -1,32 +1,53 @@
 # SneakX — Project Continuation & Session Handover
 
-**Timestamp**: 2026-09-28T00:15:00+05:30  
+**Timestamp**: 2026-09-28T10:45:00+05:30  
 **Project**: SneakX — Smart Sneaker E-commerce Platform  
-**Current Phase**: Phase 24 (Saved Addresses at Checkout) & Phase 25 (Checkout Order Summary Price Breakdown)  
-**Status**: Features fully implemented, verified, and documented. Backend 34/34 tests passing; frontend production build 0 errors.
+**Current Phase**: Phase 26 (Coupon & Discount Codes Engine)  
+**Status**: Features fully implemented, verified, and documented. Backend 44/44 tests passing; frontend production build 0 errors.
 
 ---
 
 ## 1. Executive Summary of Recent Milestones
 
-1. **Saved Addresses at Checkout (Phase 24)**:
+1. **Coupon & Discount Codes Engine (Phase 26)**:
+   - Full coupon lifecycle implemented on both customer and admin sides.
+   - **Customer Experience**:
+     - Interactive "Apply coupon" card in Checkout page Order Summary.
+     - Dynamic Discount line item between Subtotal and Tax/Shipping.
+     - Final Total updates instantly; provides clear inline error messaging for expired/ineligible codes and a "Remove" option.
+     - Server-side discount validation and calculation prevents client tampering.
+     - Synchronized with Razorpay payment orders and COD orders so exact discounted amount is charged.
+     - Order Confirmation page and Customer Orders page render applied coupon and discount amounts.
+     - HTML confirmation email receipts itemize coupon discount.
+   - **Coupon Rules Engine**:
+     - Supports `PERCENTAGE` discounts (with optional `maxDiscountAmount` cap) and `FLAT` amount discounts.
+     - Enforces `minOrderAmount`, `expiryDate`, `totalUsageLimit`, and `onePerUser` restrictions.
+     - Automatic usage counter incrementation on successful checkout.
+   - **Admin Portal**:
+     - Dedicated Coupon Management tab in Admin Dashboard (`/admin`).
+     - Create coupons, list existing coupons with usage statistics, toggle active/inactive status, and delete coupons.
+   - **Sample Seed Data**:
+     - `SNEAK10`: 10% off (max ₹2,500) on orders over ₹3,000.
+     - `FLAT500`: Flat ₹500 off on orders over ₹4,000.
+     - `GRAIL20`: 20% off (max ₹5,000) on orders over ₹10,000.
+2. **Saved Addresses at Checkout (Phase 24)**:
    - Full-stack Amazon/Myntra-style address management integrated directly into the Checkout page (`/checkout`).
    - Authenticated users can choose from previously saved address cards with default pre-selection, or click "+ Add New Address" to reveal the form with an inline cancel option.
    - Guest and first-time users continue seeing the blank address form seamlessly.
    - Backend exposes user-scoped REST endpoints (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `PATCH /{id}/default` under `/api/addresses`) with strict `@AuthenticationPrincipal` ownership verification.
    - Orders can be placed using `addressId` or new address fields (with optional `saveAddress: true` flag).
-2. **Checkout Order Summary Price Breakdown (Phase 25)**:
+3. **Checkout Order Summary Price Breakdown (Phase 25)**:
    - Added visible `Tax: Included in price (18% GST)` line item between Subtotal and Shipping in the Checkout page order summary card.
    - Matches the wording and formatting from the order confirmation receipt (`EmailService.java`) while adopting the checkout page's dark theme design system (`var(--text-secondary)`, `var(--text-muted)`).
    - Charged amounts and calculation logic remain 100% unaltered.
-3. **Security Hardening & Repository Sanitization (Phase 23)**:
+4. **Security Hardening & Repository Sanitization (Phase 23)**:
    - Sanitized credentials across the repository; removed public test credentials from `README.md`.
    - Replaced hardcoded credentials with environment variables (`ADMIN_INITIAL_PASSWORD`, `DEMO_CUSTOMER_PASSWORD`).
    - Removed PII (real phone numbers replaced with placeholders) and sanitized JWT secret fallbacks.
    - Synchronized live Aiven Cloud MySQL database passwords with BCrypt hashes.
-4. **Verification Status**:
-   - Backend: `mvn test` -> **34 / 34 tests passed** (BUILD SUCCESS).
-   - Frontend: `npm run build` -> **0 errors, 0 warnings** (Vite production bundle created cleanly).
+5. **Verification Status**:
+   - Backend: `mvn test` -> **44 / 44 tests passed** (BUILD SUCCESS).
+   - Frontend: `npm run build` -> **0 errors, 0 warnings** (Vite production bundle created in 14.00s).
 
 ---
 

@@ -16,6 +16,9 @@ public class OrderDto {
     private String paymentStatus;
     private String paymentReference;
     private Boolean confirmationEmailSent;
+    private String couponCode;
+    private BigDecimal discountAmount;
+    private BigDecimal subtotal;
     private List<OrderItemDto> items;
     private LocalDateTime createdAt;
 
@@ -123,5 +126,29 @@ public class OrderDto {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public String getCouponCode() {
+        return couponCode;
+    }
+
+    public void setCouponCode(String couponCode) {
+        this.couponCode = couponCode;
+    }
+
+    public BigDecimal getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(BigDecimal discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public BigDecimal getSubtotal() {
+        return subtotal;
+    }
+
+    public void setSubtotal(BigDecimal subtotal) {
+        this.subtotal = subtotal;
     }
 }

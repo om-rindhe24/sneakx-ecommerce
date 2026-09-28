@@ -367,6 +367,10 @@ public class EmailService {
         String paymentMethodDisplay = resolvePaymentMethodDisplay(order.getPaymentMethod());
         String paymentStatusDisplay = resolvePaymentStatusDisplay(order.getPaymentMethod(), order.getPaymentStatus());
 
+        String discountLog = (order.getDiscountAmount() != null && order.getDiscountAmount().compareTo(BigDecimal.ZERO) > 0)
+                ? String.format(" Discount:     -₹%s (Coupon: %s)\n", formatInr(order.getDiscountAmount()), order.getCouponCode() != null ? order.getCouponCode() : "N/A")
+                : "";
+
         String logOutput = "\n" +
                 "========================================================================================\n" +
                 " [SNEAKX EMAIL SERVICE] ORDER CONFIRMATION DISPATCHED (DEVELOPMENT FALLBACK LOG)\n" +
@@ -378,6 +382,7 @@ public class EmailService {
                 " Status:      " + order.getStatus() + "\n" +
                 " Payment:     " + paymentMethodDisplay + " | Status: " + paymentStatusDisplay + "\n" +
                 " Total Billed: ₹" + formatInr(order.getTotalAmount()) + "\n" +
+                discountLog +
                 " Shipping To: " + addressStr + "\n" +
                 " Items Ordered:\n" + itemsSummary.toString() +
                 " CTA Action:  " + frontendUrl + "/orders\n" +
@@ -461,13 +466,22 @@ public class EmailService {
             }
         }
 
-        BigDecimal grandTotal = order.getTotalAmount() != null ? order.getTotalAmount() : subtotal;
-        BigDecimal shipping = grandTotal.subtract(subtotal);
+        BigDecimal rawSubtotal = order.getSubtotal() != null ? order.getSubtotal() : subtotal;
+        BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal grandTotal = order.getTotalAmount() != null ? order.getTotalAmount() : rawSubtotal.subtract(discount);
+        BigDecimal shipping = grandTotal.subtract(rawSubtotal.subtract(discount));
         if (shipping.compareTo(BigDecimal.ZERO) < 0) shipping = BigDecimal.ZERO;
 
         String shippingDisplay = shipping.compareTo(BigDecimal.ZERO) == 0
                 ? "<span style='color: #10B981; font-weight: 700;'>FREE</span>"
                 : "₹" + formatInr(shipping);
+
+        String discountHtmlRow = (discount.compareTo(BigDecimal.ZERO) > 0)
+                ? "          <tr>\n" +
+                  "            <td style='padding: 5px 0; color: #10B981;'>Discount (" + (order.getCouponCode() != null ? escapeHtml(order.getCouponCode()) : "Coupon") + "):</td>\n" +
+                  "            <td style='padding: 5px 0; text-align: right; color: #10B981; font-family: monospace;'>-₹" + formatInr(discount) + "</td>\n" +
+                  "          </tr>\n"
+                : "";
 
         Address addr = order.getAddress();
         String shippingDetails = addr != null
@@ -572,8 +586,9 @@ public class EmailService {
                 "        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>\n" +
                 "          <tr>\n" +
                 "            <td style='padding: 5px 0; color: #A1A1AA;'>Subtotal:</td>\n" +
-                "            <td style='padding: 5px 0; text-align: right; color: #FFFFFF; font-family: monospace;'>₹" + formatInr(subtotal) + "</td>\n" +
+                "            <td style='padding: 5px 0; text-align: right; color: #FFFFFF; font-family: monospace;'>₹" + formatInr(rawSubtotal) + "</td>\n" +
                 "          </tr>\n" +
+                discountHtmlRow +
                 "          <tr>\n" +
                 "            <td style='padding: 5px 0; color: #A1A1AA;'>Tax:</td>\n" +
                 "            <td style='padding: 5px 0; text-align: right; color: #71717A; font-size: 12px;'>Included in price (18% GST)</td>\n" +

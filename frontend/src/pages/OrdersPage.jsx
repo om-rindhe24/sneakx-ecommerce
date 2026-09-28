@@ -95,6 +95,19 @@ export const OrdersPage = () => {
                   </div>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    {order.couponCode && order.discountAmount > 0 && (
+                      <span style={{
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: 'var(--status-success)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        padding: '2px 8px',
+                        borderRadius: 'var(--radius-sm)'
+                      }}>
+                        {order.couponCode} (-₹{Number(order.discountAmount)?.toLocaleString('en-IN')})
+                      </span>
+                    )}
                     <span className={`badge ${statusColor}`}>{order.status}</span>
                     <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '16px', fontWeight: 800, color: 'var(--accent-primary)' }}>
                       ₹{order.totalAmount?.toLocaleString('en-IN')}

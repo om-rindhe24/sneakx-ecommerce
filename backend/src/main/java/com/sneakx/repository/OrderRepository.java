@@ -28,4 +28,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     @Query("SELECT COUNT(o) FROM Order o WHERE o.status = 'PLACED' OR o.status = 'CONFIRMED'")
     Long countActiveOrders();
+
+    boolean existsByUserIdAndCouponCodeIgnoreCaseAndStatusNot(Long userId, String couponCode, String status);
 }
