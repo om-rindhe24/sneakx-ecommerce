@@ -264,6 +264,69 @@ public class EmailService {
         return resolveBrevoApiKey() == null && sender == null;
     }
 
+    /**
+     * Sends an order cancellation email to the customer with cancelled items, reason, and refund status.
+     * Operates with safe fallbacks (Brevo API -> SMTP -> Dev Console Log).
+     * Never throws exceptions so cancellation transaction is never compromised.
+     */
+    public boolean sendOrderCancellation(Order order) {
+        if (order == null || order.getUser() == null) {
+            log.warn("[EMAIL-SERVICE] Cannot dispatch cancellation email: Order or User entity is null");
+            return false;
+        }
+
+        String orderNumber = order.getOrderNumber();
+        String recipientEmail = order.getUser().getEmail();
+        if (recipientEmail == null || recipientEmail.trim().isEmpty()) {
+            log.warn("[EMAIL-SERVICE] Customer email is missing for cancelled order #{}", orderNumber);
+            return false;
+        }
+        recipientEmail = recipientEmail.trim();
+
+        String customerName = getCustomerDisplayName(order);
+        String subject = "Order Cancelled #" + orderNumber + " | SneakX";
+        String htmlContent = buildCancellationEmailHtml(order, customerName);
+
+        // 1. Try Brevo REST API first
+        if (resolveBrevoApiKey() != null) {
+            String fromDisplayName = mailFromName != null && !mailFromName.trim().isEmpty() ? mailFromName.trim() : "SneakX Orders";
+            boolean sent = sendViaBrevoApi(recipientEmail, customerName, subject, htmlContent, fromDisplayName);
+            if (sent) {
+                log.info("[EMAIL-SERVICE] Cancellation email successfully delivered to {} via Brevo API for order #{}",
+                        recipientEmail, orderNumber);
+                return true;
+            }
+            log.warn("[EMAIL-SERVICE] Brevo API delivery failed for cancellation email #{}. Falling back to SMTP if available.", orderNumber);
+        }
+
+        // 2. Try SMTP fallback
+        JavaMailSender sender = getEffectiveMailSender();
+        if (sender != null) {
+            try {
+                MimeMessage message = sender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
+                String fromAddress = resolveFromAddress();
+                String fromDisplayName = mailFromName != null && !mailFromName.trim().isEmpty() ? mailFromName.trim() : "SneakX Orders";
+                helper.setFrom(new InternetAddress(fromAddress, fromDisplayName));
+                helper.setTo(recipientEmail);
+                helper.setSubject(subject);
+                helper.setText(htmlContent, true);
+
+                sender.send(message);
+                log.info("[EMAIL-SERVICE] Cancellation email successfully delivered to {} via SMTP for order #{}",
+                        recipientEmail, orderNumber);
+                return true;
+            } catch (Exception ex) {
+                log.error("[EMAIL-SERVICE] Failed to deliver cancellation email via SMTP to {} for order #{}: {}",
+                        recipientEmail, orderNumber, sanitizeErrorMessage(ex.getMessage()));
+            }
+        }
+
+        // 3. Fallback console logging
+        logDevFallbackCancellation(order, recipientEmail, customerName, subject);
+        return resolveBrevoApiKey() == null && sender == null;
+    }
+
     private JavaMailSender getEffectiveMailSender() {
         if (autowiredMailSender != null && mailHost != null && !mailHost.trim().isEmpty()) {
             return autowiredMailSender;
@@ -388,6 +451,47 @@ public class EmailService {
                 " CTA Action:  " + frontendUrl + "/orders\n" +
                 " Note:        To send real emails via SMTP, set MAIL_HOST, MAIL_PORT, MAIL_USERNAME,\n" +
                 "              MAIL_PASSWORD in your environment.\n" +
+                "========================================================================================\n";
+
+        log.info(logOutput);
+    }
+
+    private void logDevFallbackCancellation(Order order, String recipientEmail, String customerName, String subject) {
+        StringBuilder itemsSummary = new StringBuilder();
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                String brand = resolveItemBrand(item);
+                itemsSummary.append(String.format("   • [%s] %s | Size: UK %s | Qty: %d | Total: ₹%s\n",
+                        brand, item.getProductName(), item.getSize(), item.getQuantity(),
+                        formatInr(item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity())))));
+            }
+        }
+
+        String refundInfo;
+        if ("COD".equalsIgnoreCase(order.getPaymentMethod()) ||
+                (order.getRefundAmount() == null || order.getRefundAmount().compareTo(BigDecimal.ZERO) <= 0)) {
+            refundInfo = "No payment was collected, so no refund is required.";
+        } else {
+            refundInfo = String.format("Refund: ₹%s | ID: %s | Status: %s",
+                    formatInr(order.getRefundAmount()),
+                    order.getRefundId() != null ? order.getRefundId() : "N/A",
+                    order.getRefundStatus() != null ? order.getRefundStatus() : "N/A");
+        }
+
+        String logOutput = "\n" +
+                "========================================================================================\n" +
+                " [SNEAKX EMAIL SERVICE] ORDER CANCELLATION DISPATCHED (DEVELOPMENT FALLBACK LOG)\n" +
+                "========================================================================================\n" +
+                " To:           " + recipientEmail + " (" + customerName + ")\n" +
+                " From:         " + (mailFrom != null ? mailFrom : "orders@sneakx.com") + "\n" +
+                " Subject:      " + subject + "\n" +
+                " Order ID:     #" + order.getOrderNumber() + "\n" +
+                " Status:       CANCELLED\n" +
+                " Cancelled At: " + (order.getCancelledAt() != null ? order.getCancelledAt().toString() : "Now") + "\n" +
+                " Reason:       " + (order.getCancellationReason() != null ? order.getCancellationReason() : "Customer request") + "\n" +
+                " Refund:       " + refundInfo + "\n" +
+                " Items:\n" + itemsSummary.toString() +
+                " CTA Action:   " + frontendUrl + "/orders\n" +
                 "========================================================================================\n";
 
         log.info(logOutput);
@@ -646,6 +750,235 @@ public class EmailService {
                 "      <div style='color: #71717A; margin-top: 2px;'>Premium Sneaker Marketplace · 100% Deadstock Verified</div>\n" +
                 "      <div style='color: #52525B; font-size: 11px; margin-top: 8px;'>\n" +
                 "        This is an automated order confirmation receipt. Questions? Contact support@sneakx.com\n" +
+                "      </div>\n" +
+                "    </div>\n" +
+                "\n" +
+                "  </div>\n" +
+                "</body>\n" +
+                "</html>";
+    }
+
+    private String buildCancellationEmailHtml(Order order, String customerName) {
+        BigDecimal subtotal = BigDecimal.ZERO;
+        StringBuilder itemsRows = new StringBuilder();
+
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                BigDecimal lineTotal = item.getPrice().multiply(BigDecimal.valueOf(item.getQuantity()));
+                subtotal = subtotal.add(lineTotal);
+
+                String brand = resolveItemBrand(item);
+                String imageUrl = item.getImageUrl();
+
+                String imageCell = "";
+                if (imageUrl != null && (imageUrl.startsWith("http://") || imageUrl.startsWith("https://"))) {
+                    imageCell = "<td style='width: 64px; vertical-align: top; padding: 12px 10px 12px 0; border-bottom: 1px solid #23262B;'>" +
+                            "<img src='" + escapeHtml(imageUrl) + "' alt='" + escapeHtml(item.getProductName()) + "' " +
+                            "width='56' height='56' style='width: 56px; height: 56px; border-radius: 6px; object-fit: cover; display: block; border: 1px solid #27272A; background-color: #18181B;' />" +
+                            "</td>";
+                }
+
+                itemsRows.append("<tr>")
+                        .append(imageCell)
+                        .append("<td style='padding: 12px 8px; border-bottom: 1px solid #23262B; vertical-align: top;'>")
+                        .append("<div style='font-size: 11px; font-weight: 700; color: #E6FF00; text-transform: uppercase; letter-spacing: 0.05em;'>").append(escapeHtml(brand)).append("</div>")
+                        .append("<div style='font-size: 14px; font-weight: 700; color: #FFFFFF; margin-top: 2px;'>").append(escapeHtml(item.getProductName())).append("</div>")
+                        .append("<div style='font-size: 12px; color: #71717A; margin-top: 2px;'>Size: <span style='color: #D4D4D8; font-family: monospace;'>UK ").append(item.getSize()).append("</span></div>")
+                        .append("</td>")
+                        .append("<td style='padding: 12px 8px; border-bottom: 1px solid #23262B; text-align: center; vertical-align: top; color: #A1A1AA; font-size: 13px;'>")
+                        .append(item.getQuantity())
+                        .append("</td>")
+                        .append("<td style='padding: 12px 8px; border-bottom: 1px solid #23262B; text-align: right; vertical-align: top; color: #A1A1AA; font-size: 13px; font-family: monospace;'>₹")
+                        .append(formatInr(item.getPrice()))
+                        .append("</td>")
+                        .append("<td style='padding: 12px 0 12px 8px; border-bottom: 1px solid #23262B; text-align: right; vertical-align: top; color: #FFFFFF; font-weight: 700; font-size: 13px; font-family: monospace;'>₹")
+                        .append(formatInr(lineTotal))
+                        .append("</td>")
+                        .append("</tr>");
+            }
+        }
+
+        BigDecimal rawSubtotal = order.getSubtotal() != null ? order.getSubtotal() : subtotal;
+        BigDecimal discount = order.getDiscountAmount() != null ? order.getDiscountAmount() : BigDecimal.ZERO;
+        BigDecimal grandTotal = order.getTotalAmount() != null ? order.getTotalAmount() : rawSubtotal.subtract(discount);
+        BigDecimal shipping = grandTotal.subtract(rawSubtotal.subtract(discount));
+        if (shipping.compareTo(BigDecimal.ZERO) < 0) shipping = BigDecimal.ZERO;
+
+        String shippingDisplay = shipping.compareTo(BigDecimal.ZERO) == 0
+                ? "<span style='color: #10B981; font-weight: 700;'>FREE</span>"
+                : "₹" + formatInr(shipping);
+
+        String discountHtmlRow = (discount.compareTo(BigDecimal.ZERO) > 0)
+                ? "          <tr>\n" +
+                  "            <td style='padding: 5px 0; color: #10B981;'>Discount (" + (order.getCouponCode() != null ? escapeHtml(order.getCouponCode()) : "Coupon") + "):</td>\n" +
+                  "            <td style='padding: 5px 0; text-align: right; color: #10B981; font-family: monospace;'>-₹" + formatInr(discount) + "</td>\n" +
+                  "          </tr>\n"
+                : "";
+
+        LocalDateTime cancelledAt = order.getCancelledAt() != null ? order.getCancelledAt() : LocalDateTime.now();
+        String cancelDateStr = cancelledAt.format(DateTimeFormatter.ofPattern("dd MMM yyyy, hh:mm a"));
+        String reasonStr = order.getCancellationReason() != null && !order.getCancellationReason().isBlank()
+                ? order.getCancellationReason()
+                : "Customer request";
+
+        // Refund section HTML
+        boolean isCod = "COD".equalsIgnoreCase(order.getPaymentMethod()) ||
+                (order.getRefundAmount() == null || order.getRefundAmount().compareTo(BigDecimal.ZERO) == 0);
+        String refundSectionHtml;
+        if (isCod) {
+            refundSectionHtml =
+                    "      <div style='background-color: #181A1F; border: 1px solid #24272D; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px;'>\n" +
+                    "        <div style='font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #A1A1AA; margin-bottom: 10px;'>\n" +
+                    "          Refund Details\n" +
+                    "        </div>\n" +
+                    "        <div style='color: #FFFFFF; font-size: 13px; font-weight: 600;'>No payment was collected, so no refund is required.</div>\n" +
+                    "        <div style='color: #71717A; font-size: 12px; margin-top: 4px;'>Payment Method: Cash on Delivery</div>\n" +
+                    "      </div>\n";
+        } else {
+            BigDecimal refundAmt = order.getRefundAmount() != null ? order.getRefundAmount() : grandTotal;
+            String refundIdStr = order.getRefundId() != null ? escapeHtml(order.getRefundId()) : "Pending Reference";
+            String refundStatusStr = order.getRefundStatus() != null ? escapeHtml(order.getRefundStatus()) : "PROCESSED";
+            refundSectionHtml =
+                    "      <div style='background-color: #181A1F; border: 1px solid #24272D; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px;'>\n" +
+                    "        <div style='font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #A1A1AA; margin-bottom: 12px;'>\n" +
+                    "          Refund Details\n" +
+                    "        </div>\n" +
+                    "        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>\n" +
+                    "          <tr>\n" +
+                    "            <td style='padding: 5px 0; color: #71717A;'>Refund Amount:</td>\n" +
+                    "            <td style='padding: 5px 0; text-align: right; color: #10B981; font-weight: 800; font-family: monospace;'>₹" + formatInr(refundAmt) + "</td>\n" +
+                    "          </tr>\n" +
+                    "          <tr>\n" +
+                    "            <td style='padding: 5px 0; color: #71717A;'>Refund Reference ID:</td>\n" +
+                    "            <td style='padding: 5px 0; text-align: right; color: #E6FF00; font-family: monospace; font-size: 12px;'>" + refundIdStr + "</td>\n" +
+                    "          </tr>\n" +
+                    "          <tr>\n" +
+                    "            <td style='padding: 5px 0; color: #71717A;'>Refund Status:</td>\n" +
+                    "            <td style='padding: 5px 0; text-align: right; color: #FFFFFF; font-weight: 700;'>" + refundStatusStr + "</td>\n" +
+                    "          </tr>\n" +
+                    "        </table>\n" +
+                    "        <p style='margin: 12px 0 0 0; font-size: 12px; color: #A1A1AA; line-height: 1.5; border-top: 1px solid #24272D; padding-top: 10px;'>\n" +
+                    "          Refunds usually reach your original payment method within 5-7 business days.\n" +
+                    "        </p>\n" +
+                    "      </div>\n";
+        }
+
+        String ordersUrl = (frontendUrl != null ? frontendUrl.replaceAll("/$", "") : "http://localhost:5173") + "/orders";
+
+        return "<!DOCTYPE html>\n" +
+                "<html lang='en'>\n" +
+                "<head>\n" +
+                "  <meta charset='UTF-8'/>\n" +
+                "  <meta name='viewport' content='width=device-width, initial-scale=1.0'/>\n" +
+                "  <title>Order Cancelled #" + escapeHtml(order.getOrderNumber()) + " | SneakX</title>\n" +
+                "</head>\n" +
+                "<body style='margin: 0; padding: 32px 12px; background-color: #0A0B0D; font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, Helvetica, Arial, sans-serif; color: #FAFAFA; line-height: 1.5;'>\n" +
+                "  <div style='max-width: 600px; margin: 0 auto; background-color: #121316; border: 1px solid #24272D; border-radius: 12px; overflow: hidden; box-shadow: 0 12px 36px rgba(0,0,0,0.6);'>\n" +
+                "\n" +
+                "    <!-- Header / Branding -->\n" +
+                "    <div style='background-color: #16181D; padding: 24px 32px; border-bottom: 2px solid #FF3B30; text-align: center;'>\n" +
+                "      <div style='font-size: 26px; font-weight: 900; letter-spacing: -0.03em; color: #FFFFFF;'>\n" +
+                "        SNEAK<span style='color: #FF3B30;'>X</span>\n" +
+                "      </div>\n" +
+                "      <div style='font-size: 11px; font-weight: 700; color: #E6FF00; letter-spacing: 0.12em; text-transform: uppercase; margin-top: 4px;'>\n" +
+                "        Verified Authentic Sneaker Drop\n" +
+                "      </div>\n" +
+                "    </div>\n" +
+                "\n" +
+                "    <!-- Main Card Body -->\n" +
+                "    <div style='padding: 32px 28px;'>\n" +
+                "\n" +
+                "      <!-- Cancellation Hero Banner -->\n" +
+                "      <div style='background-color: rgba(255, 59, 48, 0.08); border: 1px solid rgba(255, 59, 48, 0.28); border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 28px;'>\n" +
+                "        <div style='display: inline-block; background-color: #FF3B30; color: #FFFFFF; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 10px; border-radius: 20px; margin-bottom: 10px;'>\n" +
+                "          Order Cancelled\n" +
+                "        </div>\n" +
+                "        <h1 style='margin: 0; font-size: 22px; font-weight: 800; color: #FFFFFF;'>Order #" + escapeHtml(order.getOrderNumber()) + " Cancelled</h1>\n" +
+                "        <p style='margin: 6px 0 0 0; font-size: 14px; color: #FF3B30; font-weight: 600;'>Your order has been cancelled and stock has been restored.</p>\n" +
+                "      </div>\n" +
+                "\n" +
+                "      <!-- Order Cancellation Grid -->\n" +
+                "      <div style='background-color: #181A1F; border: 1px solid #24272D; border-radius: 8px; padding: 16px 20px; margin-bottom: 24px;'>\n" +
+                "        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 6px 0; color: #71717A;'>Order ID:</td>\n" +
+                "            <td style='padding: 6px 0; text-align: right; color: #E6FF00; font-family: monospace; font-weight: 700;'>#" + escapeHtml(order.getOrderNumber()) + "</td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 6px 0; color: #71717A;'>Cancellation Date:</td>\n" +
+                "            <td style='padding: 6px 0; text-align: right; color: #FFFFFF;'>" + cancelDateStr + "</td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 6px 0; color: #71717A;'>Cancellation Reason:</td>\n" +
+                "            <td style='padding: 6px 0; text-align: right; color: #FFFFFF; font-weight: 600;'>" + escapeHtml(reasonStr) + "</td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 6px 0; color: #71717A;'>Order Status:</td>\n" +
+                "            <td style='padding: 6px 0; text-align: right; color: #FF3B30; font-weight: 700; text-transform: uppercase;'>CANCELLED</td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "      </div>\n" +
+                "\n" +
+                "      <!-- Cancelled Items Table -->\n" +
+                "      <div style='margin-bottom: 28px;'>\n" +
+                "        <div style='font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #A1A1AA; margin-bottom: 12px;'>\n" +
+                "          Cancelled Items\n" +
+                "        </div>\n" +
+                "        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>\n" +
+                "          <thead>\n" +
+                "            <tr style='background-color: #181A1F; color: #71717A; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;'>\n" +
+                "              <th colspan='" + (order.getItems() != null && !order.getItems().isEmpty() && order.getItems().get(0).getImageUrl() != null ? "2" : "1") + "' style='padding: 10px 8px; text-align: left;'>Sneaker</th>\n" +
+                "              <th style='padding: 10px 8px; text-align: center;'>Qty</th>\n" +
+                "              <th style='padding: 10px 8px; text-align: right;'>Unit Price</th>\n" +
+                "              <th style='padding: 10px 0 10px 8px; text-align: right;'>Total</th>\n" +
+                "            </tr>\n" +
+                "          </thead>\n" +
+                "          <tbody>\n" +
+                itemsRows.toString() +
+                "          </tbody>\n" +
+                "        </table>\n" +
+                "      </div>\n" +
+                "\n" +
+                "      <!-- Price Summary -->\n" +
+                "      <div style='background-color: #181A1F; border: 1px solid #24272D; border-radius: 8px; padding: 18px 20px; margin-bottom: 24px;'>\n" +
+                "        <table style='width: 100%; border-collapse: collapse; font-size: 13px;'>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 5px 0; color: #A1A1AA;'>Subtotal:</td>\n" +
+                "            <td style='padding: 5px 0; text-align: right; color: #FFFFFF; font-family: monospace;'>₹" + formatInr(rawSubtotal) + "</td>\n" +
+                "          </tr>\n" +
+                discountHtmlRow +
+                "          <tr>\n" +
+                "            <td style='padding: 5px 0; color: #A1A1AA;'>Tax:</td>\n" +
+                "            <td style='padding: 5px 0; text-align: right; color: #71717A; font-size: 12px;'>Included in price (18% GST)</td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 5px 0; color: #A1A1AA;'>Shipping:</td>\n" +
+                "            <td style='padding: 5px 0; text-align: right;'>" + shippingDisplay + "</td>\n" +
+                "          </tr>\n" +
+                "          <tr>\n" +
+                "            <td style='padding: 12px 0 0 0; font-size: 16px; font-weight: 800; color: #FFFFFF; border-top: 1px solid #24272D;'>Total Amount:</td>\n" +
+                "            <td style='padding: 12px 0 0 0; text-align: right; font-size: 18px; font-weight: 800; color: #E6FF00; font-family: monospace; border-top: 1px solid #24272D;'>₹" + formatInr(grandTotal) + "</td>\n" +
+                "          </tr>\n" +
+                "        </table>\n" +
+                "      </div>\n" +
+                "\n" +
+                refundSectionHtml +
+                "\n" +
+                "      <!-- CTA Button: View Orders -->\n" +
+                "      <div style='text-align: center; margin: 32px 0 20px 0;'>\n" +
+                "        <a href='" + escapeHtml(ordersUrl) + "' style='display: inline-block; background-color: #E6FF00; color: #0A0B0D; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em; text-decoration: none; padding: 14px 32px; border-radius: 6px; box-shadow: 0 4px 14px rgba(230, 255, 0, 0.3);'>\n" +
+                "          View My Orders →\n" +
+                "        </a>\n" +
+                "      </div>\n" +
+                "\n" +
+                "    </div>\n" +
+                "\n" +
+                "    <!-- Footer -->\n" +
+                "    <div style='background-color: #16181D; padding: 24px; text-align: center; border-top: 1px solid #24272D; font-size: 12px;'>\n" +
+                "      <div style='font-weight: 700; color: #FFFFFF; letter-spacing: 0.04em;'>SneakX</div>\n" +
+                "      <div style='color: #71717A; margin-top: 2px;'>Premium Sneaker Marketplace · 100% Deadstock Verified</div>\n" +
+                "      <div style='color: #52525B; font-size: 11px; margin-top: 8px;'>\n" +
+                "        This is an automated cancellation receipt. Questions? Contact support@sneakx.com\n" +
                 "      </div>\n" +
                 "    </div>\n" +
                 "\n" +

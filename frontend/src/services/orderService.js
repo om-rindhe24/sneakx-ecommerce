@@ -26,5 +26,10 @@ export const orderService = {
       console.error('Failed to fetch order by number', err);
       return null;
     }
+  },
+
+  cancelOrder: async (id, reason) => {
+    const res = await api.post(`/orders/${id}/cancel`, { reason });
+    return res.data;
   }
 };

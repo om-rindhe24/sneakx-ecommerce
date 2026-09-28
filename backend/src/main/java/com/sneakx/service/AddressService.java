@@ -12,6 +12,7 @@ import com.sneakx.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -27,8 +28,33 @@ public class AddressService {
         this.userRepository = userRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public List<AddressDto> getUserAddresses(Long userId) {
+        List<Address> addresses = addressRepository.findByUserIdOrderByIdDesc(userId);
+        if (addresses.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // Detect if user has multiple default addresses (old data) or none
+        List<Address> defaultAddresses = addresses.stream()
+                .filter(a -> Boolean.TRUE.equals(a.getIsDefault()))
+                .collect(Collectors.toList());
+
+        if (defaultAddresses.size() > 1) {
+            // Repair: Treat only the most recently added default address (highest ID) as default, clear the rest
+            Address trueDefault = defaultAddresses.get(0);
+            for (int i = 1; i < defaultAddresses.size(); i++) {
+                Address staleDefault = defaultAddresses.get(i);
+                staleDefault.setIsDefault(false);
+                addressRepository.save(staleDefault);
+            }
+        } else if (defaultAddresses.isEmpty()) {
+            // Repair: If user has addresses but none is marked default, set the most recent one as default
+            Address newDefault = addresses.get(0);
+            newDefault.setIsDefault(true);
+            addressRepository.save(newDefault);
+        }
+
         return addressRepository.findByUserIdOrderByIsDefaultDescIdDesc(userId).stream()
                 .map(AddressDto::fromEntity)
                 .collect(Collectors.toList());
@@ -90,7 +116,7 @@ public class AddressService {
             throw new UnauthorizedException("Unauthorized access to update this address.");
         }
 
-        if (Boolean.TRUE.equals(request.getIsDefault()) && !Boolean.TRUE.equals(address.getIsDefault())) {
+        if (Boolean.TRUE.equals(request.getIsDefault())) {
             List<Address> userAddresses = addressRepository.findByUserId(userId);
             for (Address a : userAddresses) {
                 if (!a.getId().equals(addressId) && Boolean.TRUE.equals(a.getIsDefault())) {
@@ -99,8 +125,22 @@ public class AddressService {
                 }
             }
             address.setIsDefault(true);
-        } else if (request.getIsDefault() != null) {
-            address.setIsDefault(request.getIsDefault());
+        } else if (Boolean.FALSE.equals(request.getIsDefault())) {
+            address.setIsDefault(false);
+            // If user unsets default on the only default address, ensure at least one other address becomes default
+            List<Address> userAddresses = addressRepository.findByUserIdOrderByIdDesc(userId);
+            boolean hasOtherDefault = userAddresses.stream()
+                    .filter(a -> !a.getId().equals(addressId))
+                    .anyMatch(a -> Boolean.TRUE.equals(a.getIsDefault()));
+            if (!hasOtherDefault) {
+                userAddresses.stream()
+                        .filter(a -> !a.getId().equals(addressId))
+                        .findFirst()
+                        .ifPresent(other -> {
+                            other.setIsDefault(true);
+                            addressRepository.save(other);
+                        });
+            }
         }
 
         address.setFullName(request.getFullName().trim());

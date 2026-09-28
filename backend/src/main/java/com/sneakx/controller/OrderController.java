@@ -1,6 +1,7 @@
 package com.sneakx.controller;
 
 import com.sneakx.dto.ApiResponse;
+import com.sneakx.dto.CancelOrderRequest;
 import com.sneakx.dto.CheckoutRequest;
 import com.sneakx.dto.OrderDto;
 import com.sneakx.security.UserPrincipal;
@@ -42,5 +43,14 @@ public class OrderController {
         boolean isAdmin = principal.getAuthorities().stream().anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
         OrderDto order = orderService.getOrderById(principal.getId(), id, isAdmin);
         return ResponseEntity.ok(ApiResponse.success("Order retrieved", order));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<ApiResponse<OrderDto>> cancelOrder(@AuthenticationPrincipal UserPrincipal principal,
+                                                             @PathVariable Long id,
+                                                             @RequestBody(required = false) CancelOrderRequest request) {
+        String reason = request != null ? request.getReason() : null;
+        OrderDto cancelled = orderService.cancelOrder(principal.getId(), id, reason);
+        return ResponseEntity.ok(ApiResponse.success("Order cancelled successfully", cancelled));
     }
 }

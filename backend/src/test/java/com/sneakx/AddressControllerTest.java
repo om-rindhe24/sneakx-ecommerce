@@ -4,6 +4,7 @@ import com.sneakx.controller.AddressController;
 import com.sneakx.dto.AddressDto;
 import com.sneakx.dto.ApiResponse;
 import com.sneakx.dto.CreateAddressRequest;
+import com.sneakx.entity.Address;
 import com.sneakx.entity.Role;
 import com.sneakx.entity.User;
 import com.sneakx.exception.UnauthorizedException;
@@ -154,4 +155,76 @@ public class AddressControllerTest {
             addressController.setDefaultAddress(principal2, addr.getId());
         });
     }
+
+    @Test
+    @DisplayName("CASE 4: Creating a new default address automatically clears previous default")
+    void testCreateNewDefaultClearsPrevious() {
+        CreateAddressRequest req1 = new CreateAddressRequest();
+        req1.setFullName("Home Address");
+        req1.setPhone("+91 98765 43210");
+        req1.setStreetAddress("101 MG Road");
+        req1.setCity("Bengaluru");
+        req1.setState("Karnataka");
+        req1.setPostalCode("560001");
+        req1.setIsDefault(true);
+        AddressDto addr1 = addressController.createAddress(principal1, req1).getBody().getData();
+        assertTrue(addr1.getIsDefault());
+
+        CreateAddressRequest req2 = new CreateAddressRequest();
+        req2.setFullName("Office Address");
+        req2.setPhone("+91 98765 43210");
+        req2.setStreetAddress("202 Brigade Road");
+        req2.setCity("Bengaluru");
+        req2.setState("Karnataka");
+        req2.setPostalCode("560025");
+        req2.setIsDefault(true);
+        AddressDto addr2 = addressController.createAddress(principal1, req2).getBody().getData();
+        assertTrue(addr2.getIsDefault());
+
+        // Verify that in DB and API, only addr2 is default
+        List<AddressDto> addresses = addressController.getUserAddresses(principal1).getBody().getData();
+        long defaultCount = addresses.stream().filter(AddressDto::getIsDefault).count();
+        assertEquals(1, defaultCount, "Exactly one address must be default");
+        assertEquals(addr2.getId(), addresses.get(0).getId());
+        assertTrue(addresses.get(0).getIsDefault());
+    }
+
+    @Test
+    @DisplayName("CASE 5: Legacy data with multiple defaults is repaired on load so only most recent remains default")
+    void testLegacyMultipleDefaultsRepairedOnLoad() {
+        // Manually persist 4 addresses with isDefault = true (simulating legacy corrupt data)
+        for (int i = 1; i <= 4; i++) {
+            Address legacy = new Address();
+            legacy.setUser(testUser1);
+            legacy.setFullName("Legacy Address " + i);
+            legacy.setPhone("+91 98765 43210");
+            legacy.setStreetAddress("Street " + i);
+            legacy.setCity("City " + i);
+            legacy.setState("State " + i);
+            legacy.setPostalCode("56000" + i);
+            legacy.setIsDefault(true);
+            addressRepository.save(legacy);
+        }
+
+        // Before load: verify database indeed has 4 addresses all marked default
+        List<Address> beforeLoad = addressRepository.findByUserId(testUser1.getId());
+        assertEquals(4, beforeLoad.size());
+        assertEquals(4, beforeLoad.stream().filter(a -> Boolean.TRUE.equals(a.getIsDefault())).count());
+
+        // Call getUserAddresses to trigger auto-repair
+        ResponseEntity<ApiResponse<List<AddressDto>>> response = addressController.getUserAddresses(principal1);
+        List<AddressDto> repairedDtos = response.getBody().getData();
+
+        // Exactly 1 address in response should be default (and it must be the most recent one)
+        assertEquals(4, repairedDtos.size());
+        long defaultCountInDto = repairedDtos.stream().filter(AddressDto::getIsDefault).count();
+        assertEquals(1, defaultCountInDto, "Only one address must be default in API response");
+        assertTrue(repairedDtos.get(0).getIsDefault());
+
+        // Verify the database was repaired in place
+        List<Address> afterLoad = addressRepository.findByUserId(testUser1.getId());
+        long defaultCountInDb = afterLoad.stream().filter(a -> Boolean.TRUE.equals(a.getIsDefault())).count();
+        assertEquals(1, defaultCountInDb, "Database must be repaired so exactly one record has is_default = true");
+    }
 }
+

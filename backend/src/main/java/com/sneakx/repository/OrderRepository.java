@@ -20,13 +20,13 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
 
     Page<Order> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
-    @Query("SELECT COUNT(o) FROM Order o")
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status <> 'CANCELLED'")
     Long countTotalOrders();
 
     @Query("SELECT COALESCE(SUM(o.totalAmount), 0) FROM Order o WHERE o.status <> 'CANCELLED'")
     BigDecimal calculateTotalRevenue();
 
-    @Query("SELECT COUNT(o) FROM Order o WHERE o.status = 'PLACED' OR o.status = 'CONFIRMED'")
+    @Query("SELECT COUNT(o) FROM Order o WHERE o.status IN ('PLACED', 'CONFIRMED', 'PROCESSING')")
     Long countActiveOrders();
 
     boolean existsByUserIdAndCouponCodeIgnoreCaseAndStatusNot(Long userId, String couponCode, String status);

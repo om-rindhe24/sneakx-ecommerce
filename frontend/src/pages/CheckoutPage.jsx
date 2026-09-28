@@ -41,7 +41,7 @@ export const CheckoutContent = () => {
     state: '',
     postalCode: '',
     country: 'India',
-    isDefault: true
+    isDefault: false
   });
 
   // Saved Addresses State
@@ -65,9 +65,23 @@ export const CheckoutContent = () => {
         setLoadingAddresses(true);
         const addresses = await addressService.getAddresses();
         if (isMounted) {
-          const list = Array.isArray(addresses)
+          const rawList = Array.isArray(addresses)
             ? addresses
             : (Array.isArray(addresses?.data) ? addresses.data : []);
+
+          // Guarantee only one true default address exists (most recently added/top default)
+          let foundDefault = false;
+          const list = rawList.filter(Boolean).map((addr) => {
+            if (addr?.isDefault && !foundDefault) {
+              foundDefault = true;
+              return { ...addr, isDefault: true };
+            }
+            return { ...addr, isDefault: false };
+          });
+          if (!foundDefault && list.length > 0) {
+            list[0] = { ...list[0], isDefault: true };
+          }
+
           setSavedAddresses(list);
           if (list.length > 0) {
             const defaultAddr = list.find((a) => a?.isDefault) || list[0];

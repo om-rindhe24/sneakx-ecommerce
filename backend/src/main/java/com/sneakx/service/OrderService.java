@@ -7,14 +7,18 @@ import com.sneakx.exception.InsufficientStockException;
 import com.sneakx.exception.ResourceNotFoundException;
 import com.sneakx.exception.UnauthorizedException;
 import com.sneakx.repository.*;
+import com.razorpay.RazorpayClient;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -22,6 +26,12 @@ import java.util.stream.Collectors;
 public class OrderService {
 
     private static final Logger log = LoggerFactory.getLogger(OrderService.class);
+
+    @Value("${app.razorpay.key-id:}")
+    private String razorpayKeyId;
+
+    @Value("${app.razorpay.key-secret:}")
+    private String razorpayKeySecret;
 
     private final OrderRepository orderRepository;
     private final OrderItemRepository orderItemRepository;
@@ -236,6 +246,10 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
 
+        if ("CANCELLED".equalsIgnoreCase(order.getStatus())) {
+            throw new BadRequestException("Cancelled orders cannot be modified or reactivated.");
+        }
+
         Set<String> validStatuses = new HashSet<>(Arrays.asList("PLACED", "CONFIRMED", "SHIPPED", "DELIVERED", "CANCELLED"));
         if (!validStatuses.contains(newStatus.toUpperCase())) {
             throw new BadRequestException("Invalid status transition: " + newStatus);
@@ -250,6 +264,20 @@ public class OrderService {
                     variantRepository.save(v);
                 }
             }
+            if (order.getCouponCode() != null && !order.getCouponCode().trim().isEmpty()) {
+                couponRepository.findByCodeIgnoreCase(order.getCouponCode().trim()).ifPresent(coupon -> {
+                    if (coupon.getUsageCount() != null && coupon.getUsageCount() > 0) {
+                        coupon.setUsageCount(coupon.getUsageCount() - 1);
+                        couponRepository.save(coupon);
+                    }
+                });
+            }
+            if (order.getCancelledAt() == null) {
+                order.setCancelledAt(LocalDateTime.now());
+            }
+            if (order.getCancellationReason() == null) {
+                order.setCancellationReason("Cancelled by Administrator");
+            }
         }
 
         order.setStatus(newStatus.toUpperCase());
@@ -259,6 +287,138 @@ public class OrderService {
 
         Order saved = orderRepository.save(order);
         return mapToOrderDto(saved);
+    }
+
+    @Transactional
+    public OrderDto cancelOrder(Long userId, Long orderId, String reason) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", "id", orderId));
+
+        // 1. Ownership check: Only the owner can cancel
+        if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+            throw new UnauthorizedException("You do not have permission to cancel this order.");
+        }
+
+        // 2. Reject non-cancellable or already cancelled orders
+        String currentStatus = order.getStatus() != null ? order.getStatus().toUpperCase() : "";
+        if ("CANCELLED".equals(currentStatus)) {
+            throw new BadRequestException("Order #" + order.getOrderNumber() + " is already cancelled.");
+        }
+        if ("SHIPPED".equals(currentStatus)) {
+            throw new BadRequestException("Orders that have already been shipped cannot be cancelled.");
+        }
+        if ("DELIVERED".equals(currentStatus)) {
+            throw new BadRequestException("Delivered orders cannot be cancelled.");
+        }
+
+        Set<String> cancellableStatuses = new HashSet<>(Arrays.asList("PENDING", "CONFIRMED", "PROCESSING", "PLACED"));
+        if (!cancellableStatuses.contains(currentStatus)) {
+            throw new BadRequestException("Order cannot be cancelled in status: " + currentStatus);
+        }
+
+        // 3. Mark status, cancelledAt, and cancellation reason
+        order.setStatus("CANCELLED");
+        order.setCancelledAt(LocalDateTime.now());
+        order.setCancellationReason(reason != null && !reason.trim().isEmpty() ? reason.trim() : "Cancelled by customer");
+
+        // 4. Stock restoration (idempotent because status check prevents re-entry)
+        if (order.getItems() != null) {
+            for (OrderItem item : order.getItems()) {
+                if (item.getVariant() != null) {
+                    ProductVariant variant = item.getVariant();
+                    variant.setStockQuantity(variant.getStockQuantity() + item.getQuantity());
+                    variantRepository.save(variant);
+                }
+            }
+        }
+
+        // 5. Restore coupon usage count
+        if (order.getCouponCode() != null && !order.getCouponCode().trim().isEmpty()) {
+            couponRepository.findByCodeIgnoreCase(order.getCouponCode().trim()).ifPresent(coupon -> {
+                if (coupon.getUsageCount() != null && coupon.getUsageCount() > 0) {
+                    coupon.setUsageCount(coupon.getUsageCount() - 1);
+                    couponRepository.save(coupon);
+                }
+            });
+        }
+
+        // 6. Process refund
+        boolean isCod = "COD".equalsIgnoreCase(order.getPaymentMethod()) ||
+                "PENDING".equalsIgnoreCase(order.getPaymentStatus());
+
+        if (isCod) {
+            order.setRefundStatus("NO_REFUND_REQUIRED");
+            order.setRefundAmount(BigDecimal.ZERO);
+            order.setRefundId(null);
+            log.info("[ORDER-CANCEL] Order #{} cancelled (COD - No refund required)", order.getOrderNumber());
+        } else {
+            // Razorpay / Paid order
+            BigDecimal refundAmt = order.getTotalAmount() != null ? order.getTotalAmount() : BigDecimal.ZERO;
+            boolean hasRealRazorpayRef = order.getPaymentReference() != null && order.getPaymentReference().startsWith("pay_");
+            boolean hasKeys = razorpayKeyId != null && !razorpayKeyId.isBlank() && razorpayKeySecret != null && !razorpayKeySecret.isBlank();
+
+            if (hasRealRazorpayRef && hasKeys) {
+                try {
+                    RazorpayClient razorpay = new RazorpayClient(razorpayKeyId, razorpayKeySecret);
+                    JSONObject refundReq = new JSONObject();
+                    long amountInPaise = refundAmt.multiply(BigDecimal.valueOf(100)).longValue();
+                    refundReq.put("amount", amountInPaise);
+                    refundReq.put("speed", "normal");
+                    JSONObject notes = new JSONObject();
+                    notes.put("orderNumber", order.getOrderNumber());
+                    notes.put("reason", order.getCancellationReason());
+                    refundReq.put("notes", notes);
+
+                    com.razorpay.Refund r = razorpay.payments.refund(order.getPaymentReference(), refundReq);
+                    String refundId = r.get("id");
+                    order.setRefundId(refundId);
+                    order.setRefundAmount(refundAmt);
+                    order.setRefundStatus("PROCESSED");
+                    log.info("[ORDER-CANCEL] Razorpay refund {} processed for order #{} (amount: ₹{})",
+                            refundId, order.getOrderNumber(), refundAmt);
+                } catch (Exception ex) {
+                    log.error("[ORDER-CANCEL] Razorpay refund failed for order #{}: {}",
+                            order.getOrderNumber(), ex.getMessage(), ex);
+                    order.setRefundStatus("REFUND_PENDING");
+                    order.setRefundAmount(refundAmt);
+                    order.setRefundId(null);
+                }
+            } else {
+                // Demo / Simulated mode or test payment without live credentials
+                String demoRefundId = "rfnd_demo_" + UUID.randomUUID().toString().replace("-", "").substring(0, 14);
+                order.setRefundId(demoRefundId);
+                order.setRefundAmount(refundAmt);
+                order.setRefundStatus("PROCESSED");
+                log.info("[ORDER-CANCEL] Demo refund {} recorded for order #{} (amount: ₹{})",
+                        demoRefundId, order.getOrderNumber(), refundAmt);
+            }
+        }
+
+        Order savedOrder = orderRepository.save(order);
+
+        // 7. Dispatch cancellation email safely after commit
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    try {
+                        emailService.sendOrderCancellation(savedOrder);
+                    } catch (Exception ex) {
+                        log.error("[ORDER-SERVICE] Safe catch: cancellation email dispatch failed after commit for order {}: {}",
+                                savedOrder.getOrderNumber(), ex.getMessage());
+                    }
+                }
+            });
+        } else {
+            try {
+                emailService.sendOrderCancellation(savedOrder);
+            } catch (Exception ex) {
+                log.error("[ORDER-SERVICE] Safe catch: cancellation email dispatch failed for order {}: {}",
+                        savedOrder.getOrderNumber(), ex.getMessage());
+            }
+        }
+
+        return mapToOrderDto(savedOrder);
     }
 
     public OrderDto mapToOrderDto(Order order) {
@@ -275,6 +435,11 @@ public class OrderService {
         dto.setPaymentMethod(order.getPaymentMethod());
         dto.setPaymentStatus(order.getPaymentStatus());
         dto.setPaymentReference(order.getPaymentReference());
+        dto.setCancellationReason(order.getCancellationReason());
+        dto.setCancelledAt(order.getCancelledAt());
+        dto.setRefundStatus(order.getRefundStatus());
+        dto.setRefundAmount(order.getRefundAmount());
+        dto.setRefundId(order.getRefundId());
         dto.setConfirmationEmailSent(order.getConfirmationEmailSent());
         dto.setCreatedAt(order.getCreatedAt());
 
@@ -312,5 +477,13 @@ public class OrderService {
         }
 
         return dto;
+    }
+
+    public void setRazorpayKeyId(String razorpayKeyId) {
+        this.razorpayKeyId = razorpayKeyId;
+    }
+
+    public void setRazorpayKeySecret(String razorpayKeySecret) {
+        this.razorpayKeySecret = razorpayKeySecret;
     }
 }

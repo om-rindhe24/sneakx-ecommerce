@@ -263,5 +263,52 @@
   - `npm run build`: Vite production bundle compiled cleanly in 14.00s with zero errors.
 - **Result**: Production-grade coupon and discount engine live, verified, and integrated end-to-end.
 
+---
 
+### Entry 10
+- **Date**: 2026-09-28
+- **Phase**: SINGLE DEFAULT ADDRESS ENFORCEMENT & DATA AUTO-HEALING
+- **Task**: Fix multiple addresses displaying DEFAULT badge simultaneously; enforce single default address invariant and auto-heal legacy records.
+- **What changed**:
+  - `AddressService.java`: Enforced single-default invariant on creation, update, and deletion; implemented `autoHealMultipleDefaults` on load to retain only the most recently used/updated address as default and reset others.
+  - `AddressControllerTest.java`: Added dedicated automated test `testSingleDefaultAddressEnforcementAndAutoHealing`.
+- **Testing & Verification**:
+  - `mvn test`: 46/46 backend tests passed.
+  - `npm run build`: Vite production bundle compiled cleanly with zero errors.
 
+---
+
+### Entry 11
+- **Date**: 2026-09-28
+- **Phase**: ORDER CANCELLATION WITH STOCK RESTORATION, REFUND & NOTIFICATIONS
+- **Task**: Add complete end-to-end order cancellation flow to SneakX matching real e-commerce standards and architecture.
+- **What changed**:
+  - **Backend Subsystem**:
+    - `Order.java`: Added nullable fields `cancellationReason`, `cancelledAt`, `refundStatus`, `refundAmount`, `refundId` with JPA mappings and getters/setters.
+    - `OrderDto.java`: Added corresponding DTO fields and getters/setters.
+    - `CancelOrderRequest.java`: Created request DTO with `reason`.
+    - `OrderRepository.java`: Updated `countTotalOrders()` and `calculateTotalRevenue()` to exclude `CANCELLED` orders (`WHERE o.status <> 'CANCELLED'`), and `countActiveOrders()` for active tracking.
+    - `OrderService.java`:
+      - Implemented atomic `@Transactional` `cancelOrder(userId, orderId, reason)`.
+      - Strict ownership validation via authenticated `UserPrincipal.getId()`.
+      - State machine validation: permits cancellation only in cancellable states (`PENDING`, `CONFIRMED`, `PROCESSING`, `PLACED`); rejects `SHIPPED`, `DELIVERED`, and duplicate `CANCELLED` with clear messages (idempotent).
+      - Stock restoration: adds ordered quantities back to `ProductVariant.stockQuantity` for each item.
+      - Coupon restoration: restores total coupon `usageCount` and frees the one-per-user restriction.
+      - Refund engine: for COD orders sets `NO_REFUND_REQUIRED` with ₹0 amount; for paid orders triggers Razorpay refund API in test mode or generates demo reference (`rfnd_demo_...`) if simulated, with graceful fallback to `REFUND_PENDING` on gateway error without rolling back cancellation.
+      - Disallowed modifying or reactivating cancelled orders in `updateOrderStatus`.
+    - `OrderController.java`: Added `POST /api/orders/{id}/cancel` endpoint.
+    - `EmailService.java`: Implemented `sendOrderCancellation(Order order)`, `buildCancellationEmailHtml`, and `logDevFallbackCancellation` with dark streetwear theme, item breakdowns, and refund messaging.
+  - **Automated Tests**:
+    - Created `OrderCancellationTest.java` with 9 comprehensive test cases (valid cancellation, stock restoration, double-cancel idempotency, shipped/delivered rejection, ownership verification, coupon restoration, COD refund path, Razorpay refund path, admin reactivation rejection).
+    - `mvn test`: 55/55 backend tests passed cleanly (BUILD SUCCESS).
+  - **Customer Frontend (`OrdersPage.jsx`)**:
+    - Added "Cancel Order" action button visible strictly for cancellable orders (`PENDING`, `CONFIRMED`, `PROCESSING`, `PLACED`), hidden for `SHIPPED`, `DELIVERED`, or `CANCELLED`.
+    - Implemented cancellation modal with reason dropdown ("Ordered by mistake", "Found a better price", "Delivery too slow", "Changed my mind", "Other"), payment/refund notice, and clear "Confirm Cancellation" / "Keep Order" buttons.
+    - Displayed `CANCELLED` red badge, cancellation reason, date/time, and refund details (amount, status, reference ID for paid orders; COD notice for cash orders).
+  - **Admin Frontend (`AdminOrdersPage.jsx`)**:
+    - Table shows cancellation reason and refund status clearly for cancelled orders.
+    - Status selection dropdown is disabled and marked `LOCKED (CANCELLED)` to prevent reactivating cancelled orders.
+- **Testing & Verification**:
+  - `mvn test`: 55/55 tests passed.
+  - `npm run build`: Vite production bundle compiled cleanly in 5.12s with zero errors.
+- **Constraints Maintained**: No git commits or pushes made; dark streetwear design tokens (`#0B0C0E`, `#161820`, `#FF3B30`) preserved.

@@ -19,6 +19,11 @@ public class OrderDto {
     private String couponCode;
     private BigDecimal discountAmount;
     private BigDecimal subtotal;
+    private String cancellationReason;
+    private LocalDateTime cancelledAt;
+    private String refundStatus;
+    private BigDecimal refundAmount;
+    private String refundId;
     private List<OrderItemDto> items;
     private LocalDateTime createdAt;
 
@@ -150,5 +155,45 @@ public class OrderDto {
 
     public void setSubtotal(BigDecimal subtotal) {
         this.subtotal = subtotal;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
+
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+
+    public String getRefundStatus() {
+        return refundStatus;
+    }
+
+    public void setRefundStatus(String refundStatus) {
+        this.refundStatus = refundStatus;
+    }
+
+    public BigDecimal getRefundAmount() {
+        return refundAmount;
+    }
+
+    public void setRefundAmount(BigDecimal refundAmount) {
+        this.refundAmount = refundAmount;
+    }
+
+    public String getRefundId() {
+        return refundId;
+    }
+
+    public void setRefundId(String refundId) {
+        this.refundId = refundId;
     }
 }
