@@ -1098,6 +1098,10 @@ export const CheckoutPage = () => {
               <span>Subtotal</span>
               <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>₹{cart.subtotal?.toLocaleString('en-IN')}</span>
             </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Tax:</span>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Included in price (18% GST)</span>
+            </div>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Shipping</span>
               <span style={{ fontFamily: 'var(--font-family-mono)', color: cart.shipping === 0 ? 'var(--status-success)' : 'var(--text-primary)', fontWeight: 600 }}>

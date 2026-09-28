@@ -1,27 +1,32 @@
 # SneakX — Project Continuation & Session Handover
 
-**Timestamp**: 2026-09-10T02:30:00+05:30  
+**Timestamp**: 2026-09-28T00:15:00+05:30  
 **Project**: SneakX — Smart Sneaker E-commerce Platform  
-**Current Phase**: Issue 1 (Data Bug Resolution) & Issue 2 (Dark Streetwear Design Polish)  
-**Status**: Paused at user request. All work, image assets, forensic audit results, and exact continuation steps saved below.
+**Current Phase**: Phase 24 (Saved Addresses at Checkout) & Phase 25 (Checkout Order Summary Price Breakdown)  
+**Status**: Features fully implemented, verified, and documented. Backend 34/34 tests passing; frontend production build 0 errors.
 
 ---
 
-## 1. Executive Summary of Tonight's Progress
+## 1. Executive Summary of Recent Milestones
 
-1. **Aiven Cloud MySQL Verified**:
-   - Connected live to `mysql-placeholder-instance.aivencloud.com:12345/defaultdb`.
-   - 16 normalized tables verified, 16/16 backend unit & integration tests passing.
-2. **Phase 1 Dark UI Redesign Deployed**:
-   - Modernized typography with **Space Grotesk** (600, 700) and **Inter**.
-   - Design tokens established in `frontend/src/styles/design-tokens.css` (`#0B0C0E` canvas, `#161820` card surface, `#FF3B30` red accent, 12px radius standard).
-   - Glassmorphic navigation header (`backdropFilter: blur(22px)`), dark search pill, circular icon pills.
-   - Modern product card with hover lift, image zoom, and quick "Add to Bag" action.
-3. **Comprehensive Image Audit (Issue 1)**:
-   - Downloaded and visually inspected all 37 product photos.
-   - Discovered and confirmed critical data bugs: dumbbells, jeans on hangers, backpacks, floral high heels, parking garages, and cross-brand mismatches.
-   - Established high-res product asset pipeline in `frontend/public/images/products/`.
-   - Secured and verified 13 authentic sneaker assets.
+1. **Saved Addresses at Checkout (Phase 24)**:
+   - Full-stack Amazon/Myntra-style address management integrated directly into the Checkout page (`/checkout`).
+   - Authenticated users can choose from previously saved address cards with default pre-selection, or click "+ Add New Address" to reveal the form with an inline cancel option.
+   - Guest and first-time users continue seeing the blank address form seamlessly.
+   - Backend exposes user-scoped REST endpoints (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `PATCH /{id}/default` under `/api/addresses`) with strict `@AuthenticationPrincipal` ownership verification.
+   - Orders can be placed using `addressId` or new address fields (with optional `saveAddress: true` flag).
+2. **Checkout Order Summary Price Breakdown (Phase 25)**:
+   - Added visible `Tax: Included in price (18% GST)` line item between Subtotal and Shipping in the Checkout page order summary card.
+   - Matches the wording and formatting from the order confirmation receipt (`EmailService.java`) while adopting the checkout page's dark theme design system (`var(--text-secondary)`, `var(--text-muted)`).
+   - Charged amounts and calculation logic remain 100% unaltered.
+3. **Security Hardening & Repository Sanitization (Phase 23)**:
+   - Sanitized credentials across the repository; removed public test credentials from `README.md`.
+   - Replaced hardcoded credentials with environment variables (`ADMIN_INITIAL_PASSWORD`, `DEMO_CUSTOMER_PASSWORD`).
+   - Removed PII (real phone numbers replaced with placeholders) and sanitized JWT secret fallbacks.
+   - Synchronized live Aiven Cloud MySQL database passwords with BCrypt hashes.
+4. **Verification Status**:
+   - Backend: `mvn test` -> **34 / 34 tests passed** (BUILD SUCCESS).
+   - Frontend: `npm run build` -> **0 errors, 0 warnings** (Vite production bundle created cleanly).
 
 ---
 

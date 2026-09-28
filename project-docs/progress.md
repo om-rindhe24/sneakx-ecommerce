@@ -170,4 +170,68 @@
   - End-to-End customer lifecycle (`verify_e2e.ps1`): Auth, product details, cart, atomic checkout, simulated card payment, order confirmation, and admin access verified.
 - **Result**: Brand isolation bug eliminated at root cause; all acceptance criteria met.
 
+---
+
+### Entry 6
+- **Date**: 2026-09-24
+- **Phase**: SECURITY HARDENING, CREDENTIAL SANITIZATION & REPOSITORY CLEANUP
+- **Task**: Eliminate hardcoded production credentials, remove PII, sanitize fallback secrets, and update database passwords.
+- **What changed**:
+  - **README & Documentation Sanitization**:
+    - Removed exposed evaluation credential tables and replaced with secure contact notes.
+    - Updated documentation to emphasize Aiven Cloud MySQL and H2 in-memory options without exposing hostnames or credentials.
+  - **DataInitializer & Configuration Hardening**:
+    - Replaced hardcoded admin and customer credentials with environment variables (`ADMIN_INITIAL_PASSWORD`, `DEMO_CUSTOMER_PASSWORD`) with safe local placeholders.
+    - Replaced real personal phone numbers with placeholder contact format (`+91 98765 43210`) and removed all PII from application logs.
+    - Removed hardcoded fallback production JWT signing keys from `application.yml` and `JwtTokenProvider.java`.
+  - **Database Credentials Update**:
+    - Updated admin and customer credentials directly in Aiven MySQL database with secure BCrypt hashes (strength 12).
+- **Testing & Verification**:
+  - `mvn test`: 31/31 backend tests passed.
+  - Live login verification against Aiven MySQL database.
+- **Result**: Complete elimination of committed secrets and PII from codebase.
+
+---
+
+### Entry 7
+- **Date**: 2026-09-27
+- **Phase**: SAVED ADDRESSES & CHECKOUT EXPERIENCE ELEVATION
+- **Task**: Implement full saved addresses support for authenticated users at checkout with address card selection, auto-default selection, add-new modal/form, and order integration.
+- **What changed**:
+  - **Backend Address Subsystem**:
+    - Enhanced `Address.java` entity with convenient getter/setter aliases (`phoneNumber`, `pinCode`).
+    - Enhanced `AddressRepository.java` with user-scoped lookup `findByIdAndUserId(Long id, Long userId)` and default-ordered queries (`findByUserIdOrderByIsDefaultDescIdDesc`).
+    - Created `AddressService.java` providing complete user-scoped address management (`getUserAddresses`, `createAddress`, `updateAddress`, `deleteAddress`, `setDefaultAddress`).
+    - Created `AddressController.java` with protected endpoints (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `PATCH /{id}/default` under `/api/addresses`), strictly verified via `@AuthenticationPrincipal UserPrincipal`.
+    - Updated DTOs (`AddressDto`, `CreateAddressRequest`, `CheckoutRequest`, `PaymentVerificationRequest`) with `saveAddress` flag support.
+    - Updated `OrderService.java` and `PaymentService.java` to support checking out using either `addressId` or new address object with optional persistence (`saveAddress: true`).
+    - Added dedicated automated test suite in `AddressControllerTest.java`.
+  - **Frontend Checkout Integration**:
+    - Created `addressService.js` client service with JWT handling.
+    - Updated `CheckoutPage.jsx` to fetch saved addresses for authenticated users upon mount.
+    - Implemented selectable address cards matching `.payment-card-option` styling with `.is-active-razorpay` active border (`#FF3B30`), radio indicator, and "DEFAULT" badge.
+    - Automatically pre-selects the default address for one-click checkout progression.
+    - Added `+ Add New Address` card styled with dashed border, opening the inline address form with a cancel option.
+    - Preserved blank form for guest / first-time users.
+- **Testing & Verification**:
+  - `mvn test`: All 34/34 backend tests passed cleanly (BUILD SUCCESS).
+  - `npm run build`: Vite production bundle created with zero errors (built in 14.0s).
+- **Result**: Seamless Amazon/Myntra-style saved address checkout workflow live and verified.
+
+---
+
+### Entry 8
+- **Date**: 2026-09-27
+- **Phase**: CHECKOUT ORDER SUMMARY PRICE BREAKDOWN & GST DISPLAY
+- **Task**: Align Checkout page order summary price breakdown with the order confirmation receipt format.
+- **What changed**:
+  - **Order Summary Price Breakdown (`CheckoutPage.jsx`)**:
+    - Added a `Tax:` row showing `Included in price (18% GST)` between `Subtotal` and `Shipping` in the Checkout summary card.
+    - Reused the exact wording and format from the confirmation receipt (`EmailService.java`).
+    - Styled with existing dark theme tokens (`var(--text-secondary)`, `var(--text-muted)`) and consistent flex gap spacing (`8px`).
+    - Preserved calculation and billing integrity: final total and charged amount remain unchanged since 18% GST is already included in item pricing.
+- **Testing & Verification**:
+  - `npm run build`: Vite production bundle compiled cleanly in 9.73s with zero errors.
+- **Result**: Complete transparency and parity between pre-payment summary and post-payment confirmation receipt.
+
 

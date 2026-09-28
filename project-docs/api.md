@@ -46,6 +46,7 @@ Authorization: Bearer <JWT_TOKEN>
 | **Cart** | 5 | 5 | **Implemented & Verified** |
 | **Wishlist** | 3 | 3 | **Implemented & Verified** |
 | **Checkout & Orders** | 3 | 3 | **Implemented & Verified** |
+| **Address Management** | 5 | 5 | **Implemented & Verified** |
 | **Reviews** | 2 | 2 | **Implemented & Verified** |
 | **Recommendations** | 3 | 3 | **Implemented & Verified** |
 | **Admin Controls** | 8 | 8 | **Implemented & Verified** |
@@ -82,20 +83,27 @@ Authorization: Bearer <JWT_TOKEN>
 - `GET /api/wishlist/check/{productId}` — Checks if product is bookmarked. *(Status: Implemented & Verified)*
 
 ### 3.5 Checkout & Orders
-- `POST /api/orders/checkout` — Atomic `@Transactional` execution: checks variant stock, locks and deducts stock, creates order with immutable snapshots of sneaker name, size, SKU, and price, clears cart, records safe `paymentReference`, and triggers `EmailService` confirmation receipt. *(Status: Implemented & Verified)*
+- `POST /api/orders/checkout` — Atomic `@Transactional` execution: checks variant stock, locks and deducts stock, resolves shipping address via `addressId` or new address (with optional `saveAddress: true`), creates order with immutable snapshots of sneaker name, size, SKU, and price, clears cart, records safe `paymentReference`, and triggers `EmailService` confirmation receipt. *(Status: Implemented & Verified)*
 - `GET /api/orders` — Customer order history. *(Status: Implemented & Verified)*
 - `GET /api/orders/{id}` — Specific order detail with line items, tracking ID, and delivery destination. *(Status: Implemented & Verified)*
 
-### 3.6 Reviews & Ratings
+### 3.6 Address Management
+- `GET /api/addresses` — List authenticated user's saved shipping addresses, ordered with default address first. *(Status: Implemented & Verified)*
+- `POST /api/addresses` — Create a new shipping address for authenticated user (optionally marked as default). *(Status: Implemented & Verified)*
+- `PUT /api/addresses/{id}` — Update an existing address with strict user ownership verification. *(Status: Implemented & Verified)*
+- `DELETE /api/addresses/{id}` — Delete an address with strict user ownership verification. *(Status: Implemented & Verified)*
+- `PATCH /api/addresses/{id}/default` — Set an address as user's primary/default delivery destination. *(Status: Implemented & Verified)*
+
+### 3.7 Reviews & Ratings
 - `GET /api/products/{productId}/reviews` — Approved customer reviews with ratings. *(Status: Implemented & Verified)*
 - `POST /api/products/{productId}/reviews` — Submit verified purchase review. *(Status: Implemented & Verified)*
 
-### 3.7 Recommendation & Size Advisor
+### 3.8 Recommendation & Size Advisor
 - `GET /api/recommendations/products/{productId}` — Content-based similarity scoring (Category +3, Brand +2, Price +1). *(Status: Implemented & Verified)*
 - `GET /api/recommendations/user` — Personalized recommendations based on wishlist/order history. *(Status: Implemented & Verified)*
 - `POST /api/recommendations/size-advisor` — Brand-variance size offset algorithm. *(Status: Implemented & Verified)*
 
-### 3.8 Admin Management (`ROLE_ADMIN`)
+### 3.9 Admin Management (`ROLE_ADMIN`)
 - `GET /api/admin/dashboard` — Platform KPIs: Total Revenue, Total Orders, Active Orders, Total Products, Registered Users, Low Stock Alerts. *(Status: Implemented & Verified)*
 - `POST /api/admin/products` — Create new sneaker silhouette with variants and images. *(Status: Implemented & Verified)*
 - `PUT /api/admin/products/{id}` — Update sneaker metadata. *(Status: Implemented & Verified)*
@@ -105,5 +113,5 @@ Authorization: Bearer <JWT_TOKEN>
 - `GET /api/admin/orders` — View all customer orders. *(Status: Implemented & Verified)*
 - `PUT /api/admin/orders/{orderId}/status` — Status transition (`CONFIRMED` -> `SHIPPED` -> `DELIVERED` -> `CANCELLED`). If cancelled, automatically restocks inventory. *(Status: Implemented & Verified)*
 
-### 3.9 System Health
+### 3.10 System Health
 - `GET /api/health` — Service uptime, version, and server timestamp. *(Status: Implemented & Verified)*

@@ -236,4 +236,39 @@ Status Legend:
 - [x] Enforce `@media (prefers-reduced-motion: reduce)` accessibility compliance across all animations
 - [x] Verify production build (`npm run build` -> built in 2.68s, 0 errors) and live responsive layout
 
+---
+
+## PHASE 23 — Security Hardening & Credential Sanitization
+- [x] Remove exposed evaluation accounts from public `README.md`
+- [x] Parameterize database initialization passwords in `DataInitializer.java` using `ADMIN_INITIAL_PASSWORD` and `DEMO_CUSTOMER_PASSWORD`
+- [x] Replace personal phone numbers and PII in seed data and logs with generic placeholders (`+91 98765 43210`)
+- [x] Sanitize fallback JWT secrets in `application.yml` and `JwtTokenProvider.java`
+- [x] Update live database credentials in Aiven Cloud MySQL with fresh BCrypt hashes (strength 12)
+- [x] Verify backend tests passing (`mvn test`: 31/31 passed)
+
+---
+
+## PHASE 24 — Saved Addresses & Address Management System
+- [x] Add property aliases (`phoneNumber`, `pinCode`) to `Address.java` entity for model flexibility
+- [x] Implement user-scoped address queries in `AddressRepository.java` (`findByIdAndUserId`, `findByUserIdOrderByIsDefaultDescIdDesc`)
+- [x] Implement `AddressService.java` with ownership verification across all CRUD methods
+- [x] Implement secure `AddressController.java` (`GET`, `POST`, `PUT /{id}`, `DELETE /{id}`, `PATCH /{id}/default` under `/api/addresses`)
+- [x] Update checkout request DTOs (`CheckoutRequest`, `PaymentVerificationRequest`) to accept `addressId` or new address with `saveAddress` flag
+- [x] Update `OrderService.java` and `PaymentService.java` to support saved address selection and address persistence
+- [x] Author comprehensive backend test suite in `AddressControllerTest.java` (All 34/34 tests passing)
+- [x] Implement frontend `addressService.js` client
+- [x] Integrate saved address cards grid into `CheckoutPage.jsx` with active selection border (`#FF3B30`), default badge, and "+ Add New Address" card
+- [x] Preserve blank delivery form flow for guest and new users
+- [x] Verify frontend build (`npm run build` -> 0 errors)
+
+---
+
+## PHASE 25 — Checkout Order Summary Price Breakdown (18% GST)
+- [x] Extract tax row format and wording from `EmailService.java` order confirmation receipt
+- [x] Add `Tax: Included in price (18% GST)` row between `Subtotal` and `Shipping` in `CheckoutPage.jsx`
+- [x] Style with dark theme tokens (`var(--text-secondary)`, `var(--text-muted)`) and 8px flex row gap
+- [x] Ensure total price calculation and charged amount remain 100% unaltered
+- [x] Verify frontend build (`npm run build` -> built in 9.73s, 0 errors)
+
+
 
