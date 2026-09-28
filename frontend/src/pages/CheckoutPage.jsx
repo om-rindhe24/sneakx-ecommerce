@@ -6,6 +6,7 @@ import { orderService } from '../services/orderService';
 import { paymentService } from '../services/paymentService';
 import { addressService } from '../services/addressService';
 import { couponService } from '../services/couponService';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 import {
   ShieldCheck,
   CreditCard,
@@ -26,7 +27,7 @@ import {
   X
 } from 'lucide-react';
 
-export const CheckoutPage = () => {
+export const CheckoutContent = () => {
   const { cart, refreshCart } = useCart();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -64,11 +65,13 @@ export const CheckoutPage = () => {
         setLoadingAddresses(true);
         const addresses = await addressService.getAddresses();
         if (isMounted) {
-          const list = Array.isArray(addresses) ? addresses : [];
+          const list = Array.isArray(addresses)
+            ? addresses
+            : (Array.isArray(addresses?.data) ? addresses.data : []);
           setSavedAddresses(list);
           if (list.length > 0) {
-            const defaultAddr = list.find((a) => a.isDefault) || list[0];
-            setSelectedAddressId(defaultAddr.id);
+            const defaultAddr = list.find((a) => a?.isDefault) || list[0];
+            setSelectedAddressId(defaultAddr?.id || null);
             setIsAddingNewAddress(false);
           } else {
             setIsAddingNewAddress(true);
@@ -78,6 +81,7 @@ export const CheckoutPage = () => {
       } catch (err) {
         console.warn('[CHECKOUT-ADDRESS-FETCH-ERROR]', err);
         if (isMounted) {
+          setSavedAddresses([]);
           setIsAddingNewAddress(true);
           setSelectedAddressId('NEW');
         }
@@ -121,17 +125,18 @@ export const CheckoutPage = () => {
   const [couponSuccess, setCouponSuccess] = useState(null);
 
   // Pricing Calculations with Coupon Discount
-  const subtotal = cart.subtotal || 0;
-  const discountAmount = appliedCoupon?.discountAmount ? Number(appliedCoupon.discountAmount) : 0;
+  const subtotal = Number(cart?.subtotal) || 0;
+  const discountAmount = Number(appliedCoupon?.discountAmount) || 0;
   const discountedSubtotal = Math.max(0, subtotal - discountAmount);
-  const shipping = cart.shipping !== undefined ? cart.shipping : (subtotal >= 5000 ? 0 : 250);
-  const finalTotal = discountedSubtotal + shipping;
+  const shipping = cart?.shipping !== undefined ? Number(cart.shipping) : (subtotal >= 5000 ? 0 : 250);
+  const finalTotal = Math.max(0, discountedSubtotal + shipping);
 
   const formattedFinalTotal = new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     maximumFractionDigits: 0
   }).format(finalTotal);
+  const formattedTotal = formattedFinalTotal;
 
   const handleApplyCoupon = async (e) => {
     if (e) e.preventDefault();
@@ -147,7 +152,10 @@ export const CheckoutPage = () => {
 
     try {
       const res = await couponService.validateCoupon(code, subtotal);
-      const couponData = res.data || res;
+      const couponData = res?.data || res;
+      if (!couponData || !couponData.code) {
+        throw new Error('Invalid coupon response received from server.');
+      }
       setAppliedCoupon(couponData);
       setCouponSuccess(`✓ Coupon '${couponData.code}' applied successfully!`);
       setCouponCodeInput('');
@@ -248,7 +256,7 @@ export const CheckoutPage = () => {
           amount: paymentOrder.amountInPaise,
           currency: paymentOrder.currency || 'INR',
           name: 'SneakX',
-          description: `SneakX Order - ${cart.totalItems} Deadstock Sneaker Item(s)`,
+          description: `SneakX Order - ${cart?.totalItems || cart?.items?.length || 0} Deadstock Sneaker Item(s)`,
           image: 'https://images.unsplash.com/photo-1552346154-21d32810aba3?w=200&auto=format&fit=crop&q=80',
           order_id: paymentOrder.orderId,
           handler: async function (response) {
@@ -445,7 +453,7 @@ export const CheckoutPage = () => {
             ) : !isAddingNewAddress && savedAddresses.length > 0 ? (
               /* Saved Address Cards Grid */
               <div className="checkout-row-2" style={{ gap: '14px' }}>
-                {savedAddresses.map((addr) => {
+                {savedAddresses.filter(Boolean).map((addr) => {
                   const isSelected = selectedAddressId === addr.id;
                   return (
                     <div
@@ -1125,11 +1133,11 @@ export const CheckoutPage = () => {
           gap: '20px'
         }}>
           <h2 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)' }}>
-            Order Items ({cart.totalItems})
+            Order Items ({cart?.totalItems || cart?.items?.length || 0})
           </h2>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '280px', overflowY: 'auto' }}>
-            {cart.items?.map((item) => (
+            {cart?.items?.map((item) => (
               <div key={item.id} style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
                 <img
                   src={item.imageUrl}
@@ -1141,7 +1149,7 @@ export const CheckoutPage = () => {
                   <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>US {item.size} • Qty {item.quantity}</p>
                 </div>
                 <span style={{ fontFamily: 'var(--font-family-mono)', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  ₹{item.itemTotal?.toLocaleString('en-IN')}
+                  ₹{(item.itemTotal != null ? Number(item.itemTotal) : 0).toLocaleString('en-IN')}
                 </span>
               </div>
             ))}
@@ -1226,7 +1234,7 @@ export const CheckoutPage = () => {
                       {appliedCoupon.code}
                     </span>
                     <span style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '6px' }}>
-                      (-₹{Number(appliedCoupon.discountAmount)?.toLocaleString('en-IN')})
+                      (-₹{(Number(appliedCoupon.discountAmount) || 0).toLocaleString('en-IN')})
                     </span>
                   </div>
                 </div>
@@ -1271,7 +1279,9 @@ export const CheckoutPage = () => {
           <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px', color: 'var(--text-secondary)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>Subtotal</span>
-              <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>₹{cart.subtotal?.toLocaleString('en-IN')}</span>
+              <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--text-primary)', fontWeight: 600 }}>
+                ₹{(cart?.subtotal != null ? Number(cart.subtotal) : subtotal).toLocaleString('en-IN')}
+              </span>
             </div>
 
             {/* Discount Row (Visible only when valid coupon applied) */}
@@ -1296,7 +1306,7 @@ export const CheckoutPage = () => {
                   </button>
                 </div>
                 <span style={{ fontFamily: 'var(--font-family-mono)', color: 'var(--status-success)', fontWeight: 700 }}>
-                  -₹{Number(appliedCoupon.discountAmount)?.toLocaleString('en-IN')}
+                  -₹{(Number(appliedCoupon.discountAmount) || 0).toLocaleString('en-IN')}
                 </span>
               </div>
             )}
@@ -1356,7 +1366,7 @@ export const CheckoutPage = () => {
           <button
             type="button"
             onClick={handleProceedPayment}
-            disabled={processing || !cart.items || cart.items.length === 0}
+            disabled={processing || !cart?.items || cart.items.length === 0}
             className="btn btn-primary btn-lg touch-target"
             style={{ width: '100%', minHeight: '52px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontWeight: 700 }}
           >
@@ -1386,3 +1396,12 @@ export const CheckoutPage = () => {
     </div>
   );
 };
+
+export const CheckoutPage = (props) => (
+  <ErrorBoundary
+    title="Checkout Temporarily Unavailable"
+    message="We encountered an issue preparing your checkout session. Your cart items are completely safe."
+  >
+    <CheckoutContent {...props} />
+  </ErrorBoundary>
+);
