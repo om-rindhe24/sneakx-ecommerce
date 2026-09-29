@@ -4,11 +4,16 @@ import com.sneakx.dto.AddToCartRequest;
 import com.sneakx.dto.CreateAddressRequest;
 import com.sneakx.dto.OrderDto;
 import com.sneakx.dto.PaymentVerificationRequest;
+import com.sneakx.entity.Address;
+import com.sneakx.entity.Order;
 import com.sneakx.entity.Product;
 import com.sneakx.entity.ProductVariant;
 import com.sneakx.entity.User;
 import com.sneakx.exception.BadRequestException;
+import com.sneakx.exception.UnauthorizedException;
+import com.sneakx.repository.AddressRepository;
 import com.sneakx.repository.CartRepository;
+import com.sneakx.repository.OrderRepository;
 import com.sneakx.repository.ProductRepository;
 import com.sneakx.repository.ProductVariantRepository;
 import com.sneakx.repository.UserRepository;
@@ -52,6 +57,12 @@ public class PaymentServiceTest {
 
     @Autowired
     private CartRepository cartRepository;
+
+    @Autowired
+    private OrderRepository orderRepository;
+
+    @Autowired
+    private AddressRepository addressRepository;
 
     private User testCustomer;
     private ProductVariant testVariant;
@@ -173,5 +184,55 @@ public class PaymentServiceTest {
         // Verify stock untouched
         ProductVariant updatedVariant = variantRepository.findById(testVariant.getId()).orElseThrow();
         assertEquals(initialStock, updatedVariant.getStockQuantity());
+    }
+
+    @Test
+    @DisplayName("SEC-01: Verifying payment for another user's order throws UnauthorizedException and does not modify order")
+    void testVerifyPaymentForOtherUserOrderThrowsUnauthorized() {
+        // Create an order belonging to another user (victim)
+        User victim = userRepository.findByEmail("victim-user@sneakx-test.com")
+                .orElseGet(() -> userRepository.save(new User("Victim", "User", "victim-user@sneakx-test.com", "Password@123", "+919876543211")));
+
+        Address victimAddress = new Address();
+        victimAddress.setUser(victim);
+        victimAddress.setFullName("Victim User");
+        victimAddress.setPhone("+919876543211");
+        victimAddress.setStreetAddress("456 Market St");
+        victimAddress.setCity("Mumbai");
+        victimAddress.setState("Maharashtra");
+        victimAddress.setPostalCode("400001");
+        victimAddress.setCountry("India");
+        victimAddress = addressRepository.save(victimAddress);
+
+        Order victimOrder = new Order();
+        victimOrder.setUser(victim);
+        victimOrder.setAddress(victimAddress);
+        victimOrder.setOrderNumber("SNK-VICTIM-001");
+        victimOrder.setStatus("PENDING");
+        victimOrder.setPaymentStatus("PENDING");
+        victimOrder.setTotalAmount(new BigDecimal("12999.00"));
+        victimOrder = orderRepository.save(victimOrder);
+
+        String orderId = "order_test_razorpay_sec01";
+        String paymentId = "pay_test_razorpay_sec01";
+        String signature = generateSignature(orderId, paymentId, mockSecret);
+
+        PaymentVerificationRequest req = new PaymentVerificationRequest();
+        req.setRazorpayOrderId(orderId);
+        req.setRazorpayPaymentId(paymentId);
+        req.setRazorpaySignature(signature);
+        req.setOrderId(victimOrder.getId());
+
+        // Attacker (testCustomer) attempts to verify/pay victim's order
+        Long attackerUserId = testCustomer.getId();
+        assertThrows(UnauthorizedException.class, () -> {
+            paymentService.verifyPaymentAndConfirmOrder(attackerUserId, req);
+        });
+
+        // Verify victim's order was NOT modified
+        Order persistedOrder = orderRepository.findById(victimOrder.getId()).orElseThrow();
+        assertEquals("PENDING", persistedOrder.getStatus());
+        assertEquals("PENDING", persistedOrder.getPaymentStatus());
+        assertNull(persistedOrder.getPaymentReference());
     }
 }

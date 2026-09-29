@@ -47,13 +47,18 @@ public class CorsConfig {
 
         config.setAllowedOrigins(new ArrayList<>(origins));
 
-        // 4. Pattern matching for Render subdomains and localhost ports
-        config.setAllowedOriginPatterns(Arrays.asList(
-                "https://*.onrender.com",
-                "https://*.vercel.app",
-                "http://localhost:*",
-                "http://127.0.0.1:*"
-        ));
+        // 4. Exact production frontend and local development pattern matching
+        List<String> originPatterns = new ArrayList<>();
+        originPatterns.add("https://sneakx-frontend.onrender.com");
+        originPatterns.add("http://localhost:*");
+        originPatterns.add("http://127.0.0.1:*");
+        if (envFrontendUrl != null && !envFrontendUrl.isBlank()) {
+            originPatterns.add(envFrontendUrl.trim());
+        }
+        if (appFrontendUrl != null && !appFrontendUrl.isBlank()) {
+            originPatterns.add(appFrontendUrl.trim());
+        }
+        config.setAllowedOriginPatterns(originPatterns);
 
         // 5. Allowed HTTP methods, headers, and exposed headers
         config.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"));

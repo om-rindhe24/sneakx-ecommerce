@@ -8,6 +8,7 @@ import com.sneakx.entity.CartItem;
 import com.sneakx.entity.Order;
 import com.sneakx.exception.BadRequestException;
 import com.sneakx.exception.ResourceNotFoundException;
+import com.sneakx.exception.UnauthorizedException;
 import com.sneakx.repository.CartRepository;
 import com.sneakx.repository.OrderRepository;
 import org.json.JSONObject;
@@ -135,6 +136,11 @@ public class PaymentService {
         if (request.getOrderId() != null) {
             Order order = orderRepository.findById(request.getOrderId())
                     .orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()));
+
+            if (order.getUser() == null || !order.getUser().getId().equals(userId)) {
+                throw new UnauthorizedException("Unauthorized access to confirm or pay for this order.");
+            }
+
             order.setStatus("CONFIRMED");
             order.setPaymentStatus("PAID");
             order.setPaymentReference(request.getRazorpayPaymentId());

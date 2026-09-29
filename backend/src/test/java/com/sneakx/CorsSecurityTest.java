@@ -56,13 +56,11 @@ public class CorsSecurityTest {
     }
 
     @Test
-    @DisplayName("CORS: Wildcard Render pattern matching allows custom onrender domains")
-    void testWildcardRenderDomain() throws Exception {
+    @DisplayName("CORS: Arbitrary wildcard onrender domains are rejected")
+    void testWildcardRenderDomainRejected() throws Exception {
         mockMvc.perform(options("/api/products/1")
                         .header("Origin", "https://sneakx-frontend-preview.onrender.com")
                         .header("Access-Control-Request-Method", "GET"))
-                .andExpect(status().isOk())
-                .andExpect(header().string("Access-Control-Allow-Origin", "https://sneakx-frontend-preview.onrender.com"))
-                .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+                .andExpect(header().doesNotExist("Access-Control-Allow-Origin"));
     }
 }
