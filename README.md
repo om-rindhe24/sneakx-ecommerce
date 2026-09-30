@@ -19,7 +19,7 @@
 | **Backend REST API** | Render | [https://sneakx-backend-sm4h.onrender.com](https://sneakx-backend-sm4h.onrender.com) | ![Active](https://img.shields.io/badge/Status-Online-success?style=flat-square) |
 | **API Health Check** | Render | [https://sneakx-backend-sm4h.onrender.com/api/health](https://sneakx-backend-sm4h.onrender.com/api/health) | `{"status":"UP"}` |
 
-> 🔒 **Security Notice & Demo Access**: Pre-configured demo credentials for the admin dashboard and customer accounts are available upon request for recruiters and hiring managers. Please contact [rindheom261@gmail.com](mailto:rindheom261@gmail.com) for secure access.
+> 🔒 **Security Notice & Demo Access**: Pre-configured demo credentials for the admin dashboard and customer accounts are available upon request for recruiters and hiring managers. Please contact [dev@sneakx.local](mailto:dev@sneakx.local) for secure access.
 
 ---
 
@@ -389,7 +389,7 @@ mvn clean package -DskipTests
 **Om Rindhe**  
 Full-Stack Software Engineer  
 - **GitHub**: [@om-rindhe24](https://github.com/om-rindhe24)  
-- **Email**: [rindheom261@gmail.com](mailto:rindheom261@gmail.com)  
+- **Email**: [dev@sneakx.local](mailto:dev@sneakx.local)  
 - **Repository**: [https://github.com/om-rindhe24/sneakx-ecommerce](https://github.com/om-rindhe24/sneakx-ecommerce)
 
 ---
